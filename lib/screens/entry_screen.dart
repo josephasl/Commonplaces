@@ -24,7 +24,7 @@ class EntryScreen extends StatefulWidget {
 }
 
 class _EntryScreenState extends State<EntryScreen> {
-  double _dragOffset = 0; // Tracks how far the user has dragged up
+  double _dragOffset = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -32,9 +32,7 @@ class _EntryScreenState extends State<EntryScreen> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // Track the vertical drag
       onVerticalDragUpdate: (details) {
-        // Only allow dragging UP (negative delta)
         if (details.primaryDelta! < 0) {
           setState(() {
             _dragOffset += details.primaryDelta!;
@@ -42,21 +40,17 @@ class _EntryScreenState extends State<EntryScreen> {
         }
       },
       onVerticalDragEnd: (details) {
-        // Sensitivity: if they dragged up more than 100 pixels OR flicked fast
-        // (Velocity is negative for upward movement)
         if (_dragOffset < -100 || (details.primaryVelocity ?? 0) < -200) {
           widget.onBack();
         } else {
-          // Snap back to position if drag wasn't enough
           setState(() {
             _dragOffset = 0;
           });
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100), // Smooth return if snapped
+        duration: const Duration(milliseconds: 100),
         curve: Curves.easeOut,
-        // Transform the whole screen based on the drag
         transform: Matrix4.translationValues(0, _dragOffset, 0),
         child: Scaffold(
           backgroundColor: Colors.white,
@@ -87,14 +81,13 @@ class _EntryScreenState extends State<EntryScreen> {
                   widget.folder,
                   widget.storage,
                   () {
-                    // Check if entry still exists in storage to prevent crashes on delete
                     final all = widget.storage.getAllEntries();
                     final exists = all.any((e) => e.id == widget.entry.id);
 
                     if (!exists) {
-                      widget.onBack(); // Exit screen if deleted
+                      widget.onBack();
                     } else {
-                      setState(() {}); // Refresh UI if just edited
+                      setState(() {});
                     }
                   },
                 ),
@@ -118,8 +111,17 @@ class _EntryScreenState extends State<EntryScreen> {
                   if (definition == null) return const SizedBox.shrink();
 
                   final value = widget.entry.getAttribute(key);
-                  if (value == null || value.toString().isEmpty)
+
+                  // --- CHANGED LOGIC HERE ---
+                  final bool isEmpty =
+                      value == null || value.toString().isEmpty;
+
+                  // If it's empty AND NOT an image, hide it.
+                  // If it IS an image, we let it pass through so the placeholder shows.
+                  if (isEmpty && definition.type != AttributeValueType.image) {
                     return const SizedBox.shrink();
+                  }
+                  // --------------------------
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 24.0),
@@ -148,11 +150,11 @@ class _EntryScreenState extends State<EntryScreen> {
                 ? Image.network(
                     value.toString(),
                     width: double.infinity,
-                    height: 250, // Fixed height for a hero-style look
+                    height: 250,
                     fit: BoxFit.cover,
                     errorBuilder: (c, e, s) => _buildPlaceholder(),
                   )
-                : _buildPlaceholder(),
+                : _buildPlaceholder(), // This will now trigger if value is null/empty
           ),
         ],
       );
@@ -190,7 +192,6 @@ class _EntryScreenState extends State<EntryScreen> {
       );
     }
 
-    // ... logic for rating, date, and text stays the same as before ...
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
