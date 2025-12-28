@@ -8,6 +8,7 @@ import '../cards.dart';
 import 'folder_screen.dart';
 import '../shakeable.dart';
 import 'edit_tags_screen.dart';
+import 'entry_screen.dart'; // IMPORT NEW SCREEN
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,24 +18,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // ... [Storage, Controllers, Search State remain same] ...
   final StorageService _storage = StorageService();
   late PageController _pageController;
-
-  // UI State
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   SortOption _folderSort = SortOption.updatedNewest;
-
-  // Category Filter State
   String _selectedFilterCategoryId = 'ALL';
-
   List<AppFolder> _folders = [];
   bool _isEditing = false;
-
   int _selectedIndex = 1;
-  AppFolder? _lastOpenedFolder;
-
   Map<String, int> _folderCounts = {};
+
+  // NAVIGATION STATE
+  AppFolder? _lastOpenedFolder;
+  AppEntry? _lastOpenedEntry; // NEW: Track open entry
 
   @override
   void initState() {
@@ -190,10 +188,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // after the animation finishes. This forces a fresh reload next time.
   }
 
+  // OPEN FOLDER
   void _openFolder(AppFolder folder) {
     setState(() {
       _lastOpenedFolder = folder;
-      // Wait for the state to update so the PageView has 3 children
+      _lastOpenedEntry = null; // Clear any old entry when opening a folder
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pageController.hasClients) {
           _pageController.animateToPage(
@@ -206,6 +205,21 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  // NEW: OPEN ENTRY
+  void _openEntry(AppEntry entry) {
+    setState(() {
+      _lastOpenedEntry = entry;
+      // We don't need to animate page because we are likely already on Page 2
+    });
+  }
+
+  // NEW: CLOSE ENTRY (Back button logic)
+  void _closeEntry() {
+    setState(() {
+      _lastOpenedEntry = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
@@ -213,27 +227,41 @@ class _HomeScreenState extends State<HomeScreen> {
       _buildHomeBody(),
     ];
 
+    // LOGIC FOR 3RD TAB
     if (_lastOpenedFolder != null) {
-      pages.add(
-        FolderScreen(
-          key: ValueKey(_lastOpenedFolder!.id),
-          folder: _lastOpenedFolder!,
-          storage: _storage,
-          onBack: () => _onBottomNavTapped(1),
-        ),
-      );
+      if (_lastOpenedEntry != null) {
+        // Show Entry Screen
+        pages.add(
+          EntryScreen(
+            entry: _lastOpenedEntry!,
+            folder: _lastOpenedFolder!,
+            storage: _storage,
+            onBack: _closeEntry, // Go back to FolderScreen
+          ),
+        );
+      } else {
+        // Show Folder Screen
+        pages.add(
+          FolderScreen(
+            key: ValueKey(_lastOpenedFolder!.id),
+            folder: _lastOpenedFolder!,
+            storage: _storage,
+            onBack: () => _onBottomNavTapped(1), // Go back to Home
+            onEntryTap: _openEntry, // Pass navigation callback
+          ),
+        );
+      }
     }
 
     final List<BottomNavigationBarItem> navItems = [
       const BottomNavigationBarItem(
-        // The '#' symbol in iOS style
         icon: Icon(CupertinoIcons.number),
         activeIcon: Icon(CupertinoIcons.number),
-        label: "Tags", // Label string is required but will be hidden
+        label: "Tags",
       ),
       const BottomNavigationBarItem(
         icon: Icon(CupertinoIcons.home),
-        activeIcon: Icon(CupertinoIcons.house),
+        activeIcon: Icon(CupertinoIcons.house_fill),
         label: "Home",
       ),
     ];
@@ -241,8 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_lastOpenedFolder != null) {
       navItems.add(
         const BottomNavigationBarItem(
-          // Rounded Square
-          icon: Icon(CupertinoIcons.square_fill),
+          icon: Icon(CupertinoIcons.square),
           activeIcon: Icon(CupertinoIcons.square_fill),
           label: "Folder",
         ),
@@ -253,7 +280,12 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       body: PageView(
         controller: _pageController,
-        onPageChanged: _onPageChanged,
+        onPageChanged: (index) {
+          setState(() {
+            _selectedIndex = index;
+            _isEditing = false;
+          });
+        },
         physics: const BouncingScrollPhysics(),
         children: pages,
       ),
@@ -275,12 +307,8 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 0,
             selectedItemColor: CupertinoColors.activeBlue,
             unselectedItemColor: CupertinoColors.systemGrey,
-
-            // --- HIDE LABELS ---
             showSelectedLabels: false,
             showUnselectedLabels: false,
-
-            // -------------------
             type: BottomNavigationBarType.fixed,
             items: navItems,
           ),

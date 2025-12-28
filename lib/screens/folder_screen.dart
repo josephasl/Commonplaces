@@ -21,11 +21,14 @@ class FolderScreen extends StatefulWidget {
   final AppFolder folder;
   final StorageService storage;
   final VoidCallback? onBack;
+  // NEW CALLBACK
+  final Function(AppEntry) onEntryTap;
 
   const FolderScreen({
     super.key,
     required this.folder,
     required this.storage,
+    required this.onEntryTap, // REQUIRE THIS
     this.onBack,
   });
 
@@ -320,11 +323,23 @@ class _FolderScreenState extends State<FolderScreen> {
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(
-              CupertinoIcons.ellipsis_circle,
-              color: Colors.black,
+          // --- ADDED EDIT BUTTON ---
+          if (widget.folder.id != 'untagged_special_id')
+            IconButton(
+              icon: const Icon(
+                CupertinoIcons.pencil,
+                color: Colors.black,
+                size: 20,
+              ),
+              onPressed: () => showEditFolderDialog(
+                context,
+                widget.folder,
+                widget.storage,
+                _refresh,
+              ),
             ),
+          IconButton(
+            icon: const Icon(CupertinoIcons.gear, color: Colors.black),
             onPressed: _openFolderSettings,
           ),
         ],
@@ -410,10 +425,15 @@ class _FolderScreenState extends State<FolderScreen> {
                           crossAxisSpacing: 10,
                           itemCount: processedEntries.length,
                           itemBuilder: (context, index) {
-                            return EntryCard(
-                              entry: processedEntries[index],
-                              visibleAttributes: visibleAttrs,
-                              tagColorResolver: widget.storage.getTagColor,
+                            final entry = processedEntries[index];
+                            return GestureDetector(
+                              onTap: () =>
+                                  widget.onEntryTap(entry), // TRIGGER CALLBACK
+                              child: EntryCard(
+                                entry: entry,
+                                visibleAttributes: visibleAttrs,
+                                tagColorResolver: widget.storage.getTagColor,
+                              ),
                             );
                           },
                         ),

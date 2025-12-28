@@ -915,3 +915,469 @@ Future<void> showMoveTagDialog(
     ),
   );
 }
+
+Future<void> showEditFolderDialog(
+  BuildContext context,
+  AppFolder folder,
+  StorageService storage,
+  VoidCallback onUpdate,
+) {
+  final TextEditingController titleController = TextEditingController(
+    text: folder.getAttribute('title'),
+  );
+
+  return showCupertinoDialog(
+    context: context,
+    builder: (context) {
+      // Start with currently selected tags
+      List<String> selectedTags = List.from(folder.displayTags);
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final allTags = storage.getGlobalTags();
+
+          return CupertinoAlertDialog(
+            title: const Text("Edit Folder"),
+            content: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  CupertinoTextField(
+                    controller: titleController,
+                    placeholder: "Folder Name",
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemGrey6,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Filter by Tags",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: allTags.map((tag) {
+                      final isSelected = selectedTags.contains(tag);
+                      final catColor = storage.getTagColor(tag);
+
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            isSelected
+                                ? selectedTags.remove(tag)
+                                : selectedTags.add(tag);
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? catColor.withOpacity(0.2)
+                                : CupertinoColors.systemGrey6,
+                            borderRadius: BorderRadius.circular(12),
+                            border: isSelected
+                                ? Border.all(color: catColor)
+                                : null,
+                          ),
+                          child: Text(
+                            "#$tag",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text("Cancel"),
+                onPressed: () => Navigator.pop(context),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () async {
+                  if (titleController.text.isNotEmpty) {
+                    folder.setAttribute('title', titleController.text);
+                    folder.setAttribute('displayTags', selectedTags);
+
+                    await storage.saveFolder(folder);
+                    onUpdate();
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text("Save"),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+// ------------------------------------------
+// 4. EDIT ENTRY DIALOG (Full Implementation)
+// ------------------------------------------
+Future<void> showEditEntryDialog(
+  BuildContext context,
+  AppEntry entry,
+  AppFolder folder,
+  StorageService storage,
+  VoidCallback onUpdate,
+) {
+  // 1. Initialize local state with entry's existing data
+  final Map<String, dynamic> formValues = Map.from(entry.attributes);
+  final Map<String, TextEditingController> textControllers = {};
+
+  final allAttributes = getEntryAttributes();
+  // Filter fields based on folder visible attributes or system requirement (tags)
+  final formAttributes = allAttributes.where((def) {
+    if (def.isSystemField) return false;
+    return folder.visibleAttributes.contains(def.key) || def.key == 'tag';
+  }).toList();
+
+  // 2. Initialize Controllers for Text/Image fields
+  for (var def in formAttributes) {
+    if (def.key != 'tag' &&
+        def.type != AttributeValueType.date &&
+        !(def.type == AttributeValueType.number && def.key == 'starRating')) {
+      textControllers[def.key] = TextEditingController(
+        text: entry.getAttribute(def.key)?.toString() ?? '',
+      );
+    }
+  }
+
+  return showCupertinoModalPopup(
+    context: context,
+    builder: (context) {
+      final TextEditingController tagSearchController = TextEditingController();
+      String tagSearchQuery = '';
+
+      // Manage expansion states
+      Set<String> expandedKeys = {};
+      try {
+        final rawList = storage.getExpandedEntryAttributes();
+        expandedKeys = rawList.map((e) => e.toString()).toSet();
+      } catch (e) {
+        expandedKeys = {'title', 'tag', 'dateCompleted'};
+      }
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final allTags = storage.getGlobalTags();
+          final visibleTags = allTags.where((tag) {
+            return tag.toLowerCase().contains(tagSearchQuery.toLowerCase());
+          }).toList();
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.9,
+            decoration: const BoxDecoration(
+              color: CupertinoColors.systemBackground,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // HEADER
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        child: const Text("Cancel"),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const Text(
+                        "Edit Entry",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                        ),
+                      ),
+                      CupertinoButton(
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () async {
+                          // Sync text controllers back to formValues
+                          textControllers.forEach((key, controller) {
+                            formValues[key] = controller.text;
+                          });
+
+                          // Update entry object
+                          formValues.forEach((key, value) {
+                            entry.setAttribute(key, value);
+                          });
+
+                          await storage.saveEntry(entry);
+                          onUpdate();
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+
+                // FORM BODY
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 40),
+                      child: Column(
+                        children: [
+                          ...formAttributes.map((def) {
+                            // Determine subtitle display text
+                            String subtitleText = "Not set";
+                            if (def.key == 'tag') {
+                              final tags = (formValues['tag'] as List?) ?? [];
+                              subtitleText = tags.isEmpty
+                                  ? "No tags"
+                                  : "${tags.length} selected";
+                            } else if (def.type == AttributeValueType.date) {
+                              final d = DateTime.tryParse(
+                                formValues[def.key]?.toString() ?? '',
+                              );
+                              if (d != null) {
+                                subtitleText =
+                                    "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+                              }
+                            } else if (def.type == AttributeValueType.number) {
+                              final num = formValues[def.key] ?? 0;
+                              subtitleText = "$num Stars";
+                            } else {
+                              final txt = formValues[def.key]?.toString();
+                              subtitleText = (txt == null || txt.isEmpty)
+                                  ? "Empty"
+                                  : txt;
+                            }
+
+                            return ExpansionTile(
+                              key: ValueKey(def.key),
+                              title: Text(
+                                def.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                subtitleText,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: CupertinoColors.systemGrey,
+                                ),
+                              ),
+                              initiallyExpanded: expandedKeys.contains(def.key),
+                              onExpansionChanged: (isOpen) {
+                                if (isOpen)
+                                  expandedKeys.add(def.key);
+                                else
+                                  expandedKeys.remove(def.key);
+                                storage.saveExpandedAttributes(
+                                  expandedKeys.toList(),
+                                );
+                              },
+                              childrenPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              children: [
+                                // TAG EDITOR
+                                if (def.key == 'tag') ...[
+                                  CupertinoTextField(
+                                    controller: tagSearchController,
+                                    placeholder: "Filter tags...",
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: CupertinoColors.systemGrey6,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    onChanged: (val) =>
+                                        setState(() => tagSearchQuery = val),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: visibleTags.map((t) {
+                                      final List<String> currentTags =
+                                          List<String>.from(
+                                            formValues['tag'] ?? [],
+                                          );
+                                      final isSelected = currentTags.contains(
+                                        t,
+                                      );
+                                      final catColor = storage.getTagColor(t);
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            isSelected
+                                                ? currentTags.remove(t)
+                                                : currentTags.add(t);
+                                            formValues['tag'] = currentTags;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? catColor.withOpacity(0.2)
+                                                : CupertinoColors.systemGrey6,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: isSelected
+                                                ? Border.all(color: catColor)
+                                                : null,
+                                          ),
+                                          child: Text(
+                                            t,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ]
+                                // DATE EDITOR
+                                else if (def.type ==
+                                    AttributeValueType.date) ...[
+                                  SizedBox(
+                                    height: 200,
+                                    child: CupertinoDatePicker(
+                                      mode: CupertinoDatePickerMode.date,
+                                      initialDateTime:
+                                          DateTime.tryParse(
+                                            formValues[def.key]?.toString() ??
+                                                '',
+                                          ) ??
+                                          DateTime.now(),
+                                      onDateTimeChanged: (picked) => setState(
+                                        () => formValues[def.key] = picked
+                                            .toIso8601String(),
+                                      ),
+                                    ),
+                                  ),
+                                ]
+                                // RATING EDITOR
+                                else if (def.key == 'starRating') ...[
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: List.generate(5, (index) {
+                                      final rating =
+                                          (formValues[def.key] ?? 0) as int;
+                                      return GestureDetector(
+                                        onTap: () => setState(
+                                          () => formValues[def.key] = index + 1,
+                                        ),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8.0),
+                                          child: Icon(
+                                            index < rating
+                                                ? CupertinoIcons.star_fill
+                                                : CupertinoIcons.star,
+                                            color: CupertinoColors.systemYellow,
+                                            size: 32,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ]
+                                // TEXT/IMAGE EDITOR
+                                else ...[
+                                  CupertinoTextField(
+                                    controller: textControllers[def.key],
+                                    placeholder:
+                                        def.type == AttributeValueType.image
+                                        ? "Paste URL here"
+                                        : "Enter ${def.label}...",
+                                    padding: const EdgeInsets.all(12),
+                                    maxLines: def.key == 'notes' ? 4 : 1,
+                                    onChanged: (val) => setState(
+                                      () => formValues[def.key] = val,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            );
+                          }).toList(),
+
+                          const SizedBox(height: 32),
+                          // Destructive Delete Button
+                          CupertinoButton(
+                            child: const Text(
+                              "Delete Entry",
+                              style: TextStyle(
+                                color: CupertinoColors.destructiveRed,
+                              ),
+                            ),
+                            onPressed: () async {
+                              final confirm = await showCupertinoDialog<bool>(
+                                context: context,
+                                builder: (ctx) => CupertinoAlertDialog(
+                                  title: const Text("Delete Entry?"),
+                                  content: const Text(
+                                    "This action cannot be undone.",
+                                  ),
+                                  actions: [
+                                    CupertinoDialogAction(
+                                      child: const Text("Cancel"),
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                    ),
+                                    CupertinoDialogAction(
+                                      isDestructiveAction: true,
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text("Delete"),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                await storage.deleteEntry(entry.id);
+                                Navigator.pop(context); // Close Edit Dialog
+                                onUpdate(); // This will trigger the pop in EntryScreen
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
