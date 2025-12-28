@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart'; // iOS Widgets
+import 'package:uuid/uuid.dart'; // Ensure uuid is imported for categories
 import 'storage_service.dart';
 import 'models.dart';
 import 'attributes.dart'; // Import registry
@@ -130,6 +131,10 @@ Future<void> showAddFolderDialog(
                       alignment: WrapAlignment.center,
                       children: allTags.map((tag) {
                         final isSelected = selectedTags.contains(tag);
+                        final catColor = storage.getTagColor(
+                          tag,
+                        ); // Use category color
+
                         return GestureDetector(
                           onTap: () {
                             setState(() {
@@ -145,17 +150,26 @@ Future<void> showAddFolderDialog(
                             ),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? CupertinoColors.activeBlue
+                                  ? catColor.withOpacity(
+                                      0.2,
+                                    ) // Pastel selection
                                   : CupertinoColors.systemGrey6,
                               borderRadius: BorderRadius.circular(12),
+                              border: isSelected
+                                  ? Border.all(color: catColor)
+                                  : null,
                             ),
                             child: Text(
                               tag,
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isSelected
-                                    ? CupertinoColors.white
+                                    ? Colors
+                                          .black // Or catColor.withOpacity(1.0)
                                     : CupertinoColors.black,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
                           ),
@@ -224,9 +238,6 @@ Future<void> showAddFolderDialog(
   );
 }
 
-// ------------------------------------------
-// 2. FOLDER SETTINGS DIALOG (Cupertino Style)
-// ------------------------------------------
 // ------------------------------------------
 // 2. FOLDER SETTINGS DIALOG (Bottom Sheet Style)
 // ------------------------------------------
@@ -311,7 +322,7 @@ Future<void> showAddEntryDialog(
   BuildContext context,
   StorageService storage,
   VoidCallback onUpdate, {
-  List<String>? prefillTags, // CHANGED: List<String>
+  List<String>? prefillTags,
   List<String>? restrictToAttributes,
 }) {
   // 1. Initialize Data Containers
@@ -552,6 +563,7 @@ Future<void> showAddEntryDialog(
                                       final isSelected = currentTags.contains(
                                         t,
                                       );
+                                      final catColor = storage.getTagColor(t);
 
                                       return GestureDetector(
                                         onTap: () {
@@ -569,19 +581,27 @@ Future<void> showAddEntryDialog(
                                           ),
                                           decoration: BoxDecoration(
                                             color: isSelected
-                                                ? CupertinoColors.activeBlue
+                                                ? catColor.withOpacity(
+                                                    0.2,
+                                                  ) // Pastel
                                                 : CupertinoColors.systemGrey6,
                                             borderRadius: BorderRadius.circular(
                                               12,
                                             ),
+                                            border: isSelected
+                                                ? Border.all(color: catColor)
+                                                : null,
                                           ),
                                           child: Text(
                                             t,
                                             style: TextStyle(
                                               fontSize: 13,
                                               color: isSelected
-                                                  ? Colors.white
+                                                  ? Colors.black
                                                   : Colors.black,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
                                             ),
                                           ),
                                         ),
@@ -660,5 +680,238 @@ Future<void> showAddEntryDialog(
         },
       );
     },
+  );
+}
+
+// ------------------------------------------
+// 4. ADD CATEGORY DIALOG
+// ------------------------------------------
+Future<void> showAddCategoryDialog(
+  BuildContext context,
+  StorageService storage,
+  VoidCallback onUpdate,
+) {
+  // ... [Logic remains same as before, see showEditCategoryDialog below for the pattern] ...
+  final TextEditingController nameController = TextEditingController();
+  int selectedColorIndex = 0;
+  int selectedIconIndex = 0;
+
+  return showCupertinoDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        return CupertinoAlertDialog(
+          title: const Text("New Category"),
+          content: Column(
+            children: [
+              const SizedBox(height: 16),
+              CupertinoTextField(
+                controller: nameController,
+                placeholder: "Category Name",
+              ),
+              const SizedBox(height: 16),
+              _buildColorPicker(
+                selectedColorIndex,
+                (i) => setState(() => selectedColorIndex = i),
+              ),
+              const SizedBox(height: 16),
+              _buildIconPicker(
+                selectedIconIndex,
+                (i) => setState(() => selectedIconIndex = i),
+              ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            CupertinoDialogAction(
+              child: const Text("Create"),
+              onPressed: () async {
+                if (nameController.text.isNotEmpty) {
+                  final newCat = TagCategory(
+                    id: const Uuid().v4(),
+                    name: nameController.text,
+                    colorIndex: selectedColorIndex,
+                    iconIndex: selectedIconIndex,
+                  );
+                  await storage.saveTagCategory(newCat);
+                  onUpdate();
+                  Navigator.pop(ctx);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+// ------------------------------------------
+// 5. EDIT CATEGORY DIALOG (NEW)
+// ------------------------------------------
+Future<void> showEditCategoryDialog(
+  BuildContext context,
+  StorageService storage,
+  TagCategory category,
+  VoidCallback onUpdate,
+) {
+  final TextEditingController nameController = TextEditingController(
+    text: category.name,
+  );
+  int selectedColorIndex = category.colorIndex;
+  int selectedIconIndex = category.iconIndex;
+
+  return showCupertinoDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) {
+        return CupertinoAlertDialog(
+          title: const Text("Edit Category"),
+          content: Column(
+            children: [
+              const SizedBox(height: 16),
+              CupertinoTextField(
+                controller: nameController,
+                placeholder: "Category Name",
+              ),
+              const SizedBox(height: 16),
+              _buildColorPicker(
+                selectedColorIndex,
+                (i) => setState(() => selectedColorIndex = i),
+              ),
+              const SizedBox(height: 16),
+              _buildIconPicker(
+                selectedIconIndex,
+                (i) => setState(() => selectedIconIndex = i),
+              ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            CupertinoDialogAction(
+              child: const Text("Save"),
+              onPressed: () async {
+                if (nameController.text.isNotEmpty) {
+                  // Create updated object with SAME ID
+                  final updatedCat = TagCategory(
+                    id: category.id,
+                    name: nameController.text,
+                    colorIndex: selectedColorIndex,
+                    iconIndex: selectedIconIndex,
+                  );
+                  await storage.saveTagCategory(updatedCat);
+                  onUpdate();
+                  Navigator.pop(ctx);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+// --- Helper Widgets to reduce code duplication ---
+Widget _buildColorPicker(int selectedIndex, Function(int) onSelect) {
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: List.generate(AppConstants.categoryColors.length, (index) {
+        final isSelected = selectedIndex == index;
+        return GestureDetector(
+          onTap: () => onSelect(index),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: AppConstants.categoryColors[index],
+              shape: BoxShape.circle,
+              border: isSelected
+                  ? Border.all(color: Colors.black, width: 2)
+                  : null,
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+}
+
+Widget _buildIconPicker(int selectedIndex, Function(int) onSelect) {
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: Row(
+      children: List.generate(AppConstants.categoryIcons.length, (index) {
+        final isSelected = selectedIndex == index;
+        return GestureDetector(
+          onTap: () => onSelect(index),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.grey.shade300 : null,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Icon(
+              AppConstants.categoryIcons[index],
+              size: 20,
+              color: Colors.black87,
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+}
+
+// ------------------------------------------
+// 6. MOVE TAG DIALOG
+// ------------------------------------------
+Future<void> showMoveTagDialog(
+  BuildContext context,
+  StorageService storage,
+  String tag,
+  VoidCallback onUpdate,
+) {
+  final categories = storage.getTagCategories();
+
+  return showCupertinoModalPopup(
+    context: context,
+    builder: (ctx) => CupertinoActionSheet(
+      title: Text("Move '$tag' to Category"),
+      actions: categories.map((cat) {
+        return CupertinoActionSheetAction(
+          onPressed: () async {
+            await storage.setTagCategory(tag, cat.id);
+            onUpdate();
+            Navigator.pop(ctx);
+          },
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                AppConstants.categoryIcons[cat.iconIndex],
+                color: AppConstants.categoryColors[cat.colorIndex],
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(cat.name, style: const TextStyle(color: Colors.black)),
+            ],
+          ),
+        );
+      }).toList(),
+      cancelButton: CupertinoActionSheetAction(
+        child: const Text("Cancel"),
+        onPressed: () => Navigator.pop(ctx),
+      ),
+    ),
   );
 }

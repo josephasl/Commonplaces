@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../storage_service.dart';
 import '../models.dart';
+import '../dialogs.dart';
 
 class EditTagsScreen extends StatefulWidget {
   final StorageService storage;
@@ -16,15 +17,6 @@ class EditTagsScreen extends StatefulWidget {
 class _EditTagsScreenState extends State<EditTagsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  SortOption _currentSort = SortOption.nameAsc;
-
-  Map<String, int> _tagCounts = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _calculateTagCounts();
-  }
 
   @override
   void dispose() {
@@ -32,226 +24,42 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
     super.dispose();
   }
 
-  void _calculateTagCounts() {
-    final entries = widget.storage.getAllEntries();
-    final Map<String, int> counts = {};
-
-    for (var entry in entries) {
-      final rawTag = entry.getAttribute('tag');
-      List<String> tags = [];
-      if (rawTag is String)
-        tags = [rawTag];
-      else if (rawTag is List)
-        tags = List<String>.from(rawTag);
-
-      for (var t in tags) {
-        counts[t] = (counts[t] ?? 0) + 1;
-      }
-    }
-    setState(() {
-      _tagCounts = counts;
-    });
-  }
-
   void _refresh() {
-    _calculateTagCounts();
+    setState(() {});
     widget.onUpdate?.call();
-  }
-
-  // --- ACTIONS (Rename/Add/Delete omitted for brevity, same as previous) ---
-  // ... Paste existing dialog functions here if not using full file ...
-  Future<void> _showAddTagDialog() async {
-    final TextEditingController controller = TextEditingController();
-    await showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text("New Tag"),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12.0),
-          child: CupertinoTextField(
-            controller: controller,
-            placeholder: "Tag Name",
-            autofocus: true,
-            textCapitalization: TextCapitalization.none,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          CupertinoDialogAction(
-            child: const Text("Create"),
-            onPressed: () async {
-              if (controller.text.isNotEmpty) {
-                await widget.storage.addGlobalTag(controller.text);
-                Navigator.pop(ctx);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-    _refresh();
-  }
-
-  Future<void> _renameTag(String oldTag) async {
-    final TextEditingController renameController = TextEditingController(
-      text: oldTag,
-    );
-    await showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: Text("Rename '$oldTag'"),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 12.0),
-          child: CupertinoTextField(
-            controller: renameController,
-            autofocus: true,
-            placeholder: "New Name",
-            clearButtonMode: OverlayVisibilityMode.editing,
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(context),
-          ),
-          CupertinoDialogAction(
-            child: const Text("Save"),
-            onPressed: () async {
-              if (renameController.text.isNotEmpty) {
-                await widget.storage.renameGlobalTag(
-                  oldTag,
-                  renameController.text,
-                );
-                Navigator.pop(context);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-    _refresh();
-  }
-
-  Future<void> _confirmDelete(String tag) async {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text("Delete Tag?"),
-        content: Text("Delete '$tag'?\nThis removes it from all entries."),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await widget.storage.removeGlobalTag(tag);
-              _refresh();
-            },
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSortSheet() {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text("Sort Tags By"),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.nameAsc);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Name (A-Z)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.nameDesc);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Name (Z-A)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.countHighToLow);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Entry Count (High to Low)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.countLowToHigh);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Entry Count (Low to High)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.updatedNewest);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Date Modified (Newest)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = SortOption.createdNewest);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Date Created (Newest)"),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          child: const Text("Cancel"),
-          onPressed: () => Navigator.pop(ctx),
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    List<String> displayTags = widget.storage.getGlobalTags();
+    // 1. Get Data
+    final categories = widget.storage
+        .getTagCategories(); // Now Sorted by sortOrder
+    final mapping = widget.storage.getTagMapping();
+    final allTags = widget.storage.getGlobalTags();
 
+    // Filter tags first
+    List<String> visibleTags = allTags;
     if (_searchQuery.isNotEmpty) {
-      displayTags = displayTags.where((tag) {
-        return tag.toLowerCase().contains(_searchQuery.toLowerCase());
-      }).toList();
+      visibleTags = allTags
+          .where((t) => t.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
     }
 
-    displayTags.sort((a, b) {
-      switch (_currentSort) {
-        case SortOption.nameAsc:
-          return a.toLowerCase().compareTo(b.toLowerCase());
-        case SortOption.nameDesc:
-          return b.toLowerCase().compareTo(a.toLowerCase());
-        case SortOption.countHighToLow:
-          return (_tagCounts[b] ?? 0).compareTo(_tagCounts[a] ?? 0);
-        case SortOption.countLowToHigh:
-          return (_tagCounts[a] ?? 0).compareTo(_tagCounts[b] ?? 0);
-        case SortOption.createdOldest:
-          return 0; // Default index
-        case SortOption.createdNewest:
-          return -1; // Reversed in next step
-        case SortOption.updatedNewest:
-          return -1; // Assuming updated = re-added to end of list
+    // 2. Group Tags
+    final Map<String, List<String>> grouped = {};
+    for (var cat in categories) {
+      grouped[cat.id] = [];
+    }
+    for (var tag in visibleTags) {
+      final catId = mapping[tag] ?? 'default_grey_cat';
+      if (grouped.containsKey(catId)) {
+        grouped[catId]!.add(tag);
+      } else {
+        grouped['default_grey_cat']?.add(tag);
       }
-    });
-
-    // Simple reverse for "newest" since storage returns oldest-first by default
-    if (_currentSort == SortOption.createdNewest ||
-        _currentSort == SortOption.updatedNewest) {
-      displayTags = displayTags.reversed.toList();
     }
 
+    // 3. Build UI
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -270,101 +78,196 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(
+              CupertinoIcons.folder_badge_plus,
+              color: Colors.black,
+            ),
+            tooltip: "New Category",
+            onPressed: () =>
+                showAddCategoryDialog(context, widget.storage, _refresh),
+          ),
+        ],
       ),
       body: Stack(
         children: [
-          // 1. LIST
-          Column(
-            children: [
-              Expanded(
-                child: displayTags.isEmpty
-                    ? Center(
-                        child: Text(
-                          widget.storage.getGlobalTags().isEmpty
-                              ? "No tags created"
-                              : "No matches",
-                          style: const TextStyle(
-                            color: CupertinoColors.systemGrey,
-                          ),
-                        ),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        itemCount: displayTags.length,
-                        separatorBuilder: (c, i) => Divider(
-                          height: 1,
-                          color: Colors.grey.shade200,
-                          indent: 16,
-                        ),
-                        itemBuilder: (context, index) {
-                          final tag = displayTags[index];
-                          final count = _tagCounts[tag] ?? 0;
+          // REORDERABLE LIST
+          // Note: ReorderableListView requires a unique key for each item
+          ReorderableListView.builder(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
+            itemCount: categories.length,
+            onReorder: (oldIndex, newIndex) async {
+              // Update state immediately for UI smoothness
+              setState(() {
+                if (oldIndex < newIndex) {
+                  newIndex -= 1;
+                }
+                final item = categories.removeAt(oldIndex);
+                categories.insert(newIndex, item);
+              });
+              // Persist to storage
+              await widget.storage.reorderTagCategories(
+                oldIndex,
+                newIndex < oldIndex ? newIndex : newIndex + 1,
+              );
+              widget.onUpdate?.call();
+            },
+            proxyDecorator: (child, index, animation) {
+              return Material(
+                elevation: 4,
+                color: Colors.white,
+                shadowColor: Colors.black26,
+                child: child,
+              );
+            },
+            itemBuilder: (context, index) {
+              final cat = categories[index];
+              final catTags = grouped[cat.id] ?? [];
 
-                          return Dismissible(
-                            key: Key(tag),
-                            direction: DismissDirection.horizontal,
-                            background: Container(
-                              color: CupertinoColors.activeBlue,
-                              alignment: Alignment.centerLeft,
-                              padding: const EdgeInsets.only(left: 20),
+              // If searching and no tags match in this category, hide it
+              // (But ReorderableListView doesn't like shrinking items to 0 size easily,
+              // so we just return an empty container if hidden, but keep the key)
+              if (catTags.isEmpty && _searchQuery.isNotEmpty) {
+                return Container(key: ValueKey(cat.id));
+              }
+
+              return Container(
+                key: ValueKey(cat.id), // Key is crucial
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- CATEGORY HEADER ---
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      color: Colors.grey.shade50,
+                      child: Row(
+                        children: [
+                          // BURGER HANDLE (Drag Listener)
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: Icon(
+                                CupertinoIcons.bars,
+                                color: Colors.grey,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+
+                          Icon(
+                            AppConstants.categoryIcons[cat.iconIndex],
+                            color: AppConstants.categoryColors[cat.colorIndex],
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            cat.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade800,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const Spacer(),
+
+                          // Edit & Delete
+                          if (cat.id != 'default_grey_cat') ...[
+                            GestureDetector(
+                              onTap: () => showEditCategoryDialog(
+                                context,
+                                widget.storage,
+                                cat,
+                                _refresh,
+                              ),
                               child: const Icon(
                                 CupertinoIcons.pencil,
-                                color: Colors.white,
+                                size: 18,
+                                color: Colors.grey,
                               ),
                             ),
-                            secondaryBackground: Container(
-                              color: CupertinoColors.destructiveRed,
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
+                            const SizedBox(width: 16),
+                            GestureDetector(
+                              onTap: () {
+                                showCupertinoDialog(
+                                  context: context,
+                                  builder: (c) => CupertinoAlertDialog(
+                                    title: const Text("Delete Category?"),
+                                    content: Text(
+                                      "Delete '${cat.name}'? Tags inside will become Uncategorized.",
+                                    ),
+                                    actions: [
+                                      CupertinoDialogAction(
+                                        child: const Text("Cancel"),
+                                        onPressed: () => Navigator.pop(c),
+                                      ),
+                                      CupertinoDialogAction(
+                                        isDestructiveAction: true,
+                                        child: const Text("Delete"),
+                                        onPressed: () async {
+                                          Navigator.pop(c);
+                                          await widget.storage
+                                              .deleteTagCategory(cat.id);
+                                          _refresh();
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                               child: const Icon(
                                 CupertinoIcons.trash,
-                                color: Colors.white,
+                                size: 18,
+                                color: Colors.grey,
                               ),
                             ),
-                            confirmDismiss: (direction) async {
-                              if (direction == DismissDirection.startToEnd) {
-                                _renameTag(tag);
-                                return false;
-                              } else {
-                                _confirmDelete(tag);
-                                return false;
-                              }
-                            },
-                            child: Container(
-                              color: Colors.white,
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 4,
-                                ),
-                                title: Text(
-                                  "#${tag.toLowerCase()}",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 16,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                trailing: Text(
-                                  "$count",
-                                  style: const TextStyle(
-                                    color: CupertinoColors.systemGrey,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                          ],
+                        ],
                       ),
-              ),
-            ],
+                    ),
+                    const Divider(height: 1, thickness: 1),
+
+                    // --- TAGS LIST ---
+                    // Note: We cannot put a ListView inside a ReorderableListView easily.
+                    // We render tags as a simple Column of tiles.
+                    if (catTags.isNotEmpty)
+                      Column(
+                        children: catTags
+                            .map(
+                              (tag) => ListTile(
+                                contentPadding: const EdgeInsets.only(
+                                  left: 54,
+                                  right: 16,
+                                ), // Indented to align past burger
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                title: Text("#$tag"),
+                                trailing: const Icon(
+                                  CupertinoIcons.right_chevron,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                onTap: () => showMoveTagDialog(
+                                  context,
+                                  widget.storage,
+                                  tag,
+                                  _refresh,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                  ],
+                ),
+              );
+            },
           ),
 
-          // 2. FLOATING UI
+          // Floating Search + Add Tag
           Positioned(
             bottom: 20,
             left: 16,
@@ -416,36 +319,43 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 GestureDetector(
-                  onTap: _showSortSheet,
-                  child: Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                  onTap: () async {
+                    final TextEditingController controller =
+                        TextEditingController();
+                    await showCupertinoDialog(
+                      context: context,
+                      builder: (ctx) => CupertinoAlertDialog(
+                        title: const Text("New Tag"),
+                        content: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: CupertinoTextField(
+                            controller: controller,
+                            placeholder: "Tag Name",
+                          ),
                         ),
-                      ],
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.sort_down,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                GestureDetector(
-                  onTap: _showAddTagDialog,
+                        actions: [
+                          CupertinoDialogAction(
+                            child: const Text("Cancel"),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                          CupertinoDialogAction(
+                            child: const Text("Create"),
+                            onPressed: () async {
+                              if (controller.text.isNotEmpty) {
+                                await widget.storage.addGlobalTag(
+                                  controller.text,
+                                );
+                                Navigator.pop(ctx);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                    _refresh();
+                  },
                   child: Container(
                     height: 50,
                     width: 50,

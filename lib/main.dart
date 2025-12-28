@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'storage_service.dart';
-import 'screens/home_screen.dart';
+import 'screens/home_screen.dart'; // Adjust path if needed
 
-// Create a global instance (or use a Provider/GetIt for dependency injection)
+// Create a global instance
 final StorageService storageService = StorageService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive and open boxes
+  // Initialize Hive boxes
   await storageService.init();
 
   runApp(const MyApp());
@@ -19,6 +19,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'Pinterest Clone', home: const HomeScreen());
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: HomeScreen(),
+    );
   }
 }

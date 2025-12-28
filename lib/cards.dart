@@ -6,12 +6,17 @@ import 'attributes.dart';
 class EntryCard extends StatelessWidget {
   final AppEntry entry;
   final List<String>? visibleAttributes;
+  final Color Function(String)? tagColorResolver;
 
-  const EntryCard({super.key, required this.entry, this.visibleAttributes});
+  const EntryCard({
+    super.key,
+    required this.entry,
+    this.visibleAttributes,
+    this.tagColorResolver,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Default to these 3 if nothing is specified
     final keysToShow = visibleAttributes ?? ['title', 'tag', 'notes'];
 
     return Container(
@@ -32,21 +37,13 @@ class EntryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: keysToShow.map((key) {
           final definition = attributeRegistry[key];
+          if (definition == null) return const SizedBox.shrink();
+
           final value = entry.getAttribute(key);
-
-          // --- CRASH FIX: Safety Check ---
-          // If the registry doesn't have this key, skip rendering instead of crashing.
-          if (definition == null) {
-            return const SizedBox.shrink();
-          }
-
           final bool isEmpty = value == null || value.toString().isEmpty;
           final bool isImage = definition.type == AttributeValueType.image;
 
-          // Hide empty text/number fields (but show empty image placeholders if you want)
-          if (isEmpty && !isImage) {
-            return const SizedBox.shrink();
-          }
+          if (isEmpty && !isImage) return const SizedBox.shrink();
 
           return Padding(
             padding: const EdgeInsets.only(bottom: 6.0),
@@ -58,7 +55,6 @@ class EntryCard extends StatelessWidget {
   }
 
   Widget _buildAttributeRenderer(AttributeDefinition def, dynamic value) {
-    // 1. Title
     if (def.key == 'title') {
       return Text(
         value.toString(),
@@ -66,42 +62,48 @@ class EntryCard extends StatelessWidget {
       );
     }
 
-    // 2. Tags
     if (def.key == 'tag') {
       List<String> tags = [];
       if (value is String)
         tags = [value];
       else if (value is List)
-        tags = List<String>.from(value);
+        tags = value.map((e) => e.toString()).toList();
 
       if (tags.isEmpty) return const SizedBox.shrink();
 
       return Wrap(
         spacing: 4,
         runSpacing: 4,
-        children: tags
-            .map(
-              (t) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  "#$t",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade800,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+        children: tags.map((t) {
+          Color bg = Colors.grey.shade100;
+          Color txt = Colors.grey.shade800;
+          if (tagColorResolver != null) {
+            final catColor = tagColorResolver!(t);
+            if (catColor != CupertinoColors.systemGrey) {
+              bg = catColor.withOpacity(0.15);
+              txt = catColor.withOpacity(1.0);
+            }
+          }
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              "#$t",
+              style: TextStyle(
+                fontSize: 10,
+                color: txt,
+                fontWeight: FontWeight.w600,
               ),
-            )
-            .toList(),
+            ),
+          );
+        }).toList(),
       );
     }
 
-    // 3. Other Types
+    // ... [Rest of switch case logic same as before] ...
     switch (def.type) {
       case AttributeValueType.date:
         if (value == null) return const SizedBox.shrink();
@@ -130,14 +132,13 @@ class EntryCard extends StatelessWidget {
           ],
         );
       case AttributeValueType.number:
-        if (def.key == 'starRating') {
+        if (def.key == 'starRating')
           return Row(
             children: [
               const Icon(Icons.star, size: 14, color: Colors.amber),
               Text(" $value", style: const TextStyle(fontSize: 12)),
             ],
           );
-        }
         return Text(
           "${def.label}: $value",
           style: const TextStyle(fontSize: 12),
@@ -157,7 +158,7 @@ class EntryCard extends StatelessWidget {
               ? Image.network(
                   value.toString(),
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => const Center(
+                  errorBuilder: (c, e, s) => const Center(
                     child: Icon(Icons.broken_image, color: Colors.grey),
                   ),
                 )
@@ -170,7 +171,6 @@ class EntryCard extends StatelessWidget {
                 ),
         );
       default:
-        // Text and List fallbacks
         return Text(
           value.toString(),
           maxLines: 4,
@@ -181,17 +181,18 @@ class EntryCard extends StatelessWidget {
   }
 }
 
-// FOLDER CARD (No changes needed, but included for completeness)
 class FolderCard extends StatelessWidget {
   final AppFolder folder;
   final Color? color;
   final int entryCount;
+  final Color Function(String)? tagColorResolver;
 
   const FolderCard({
     super.key,
     required this.folder,
     this.color,
     this.entryCount = 0,
+    this.tagColorResolver,
   });
 
   @override
@@ -241,41 +242,49 @@ class FolderCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
+
           if (folder.displayTags.isNotEmpty)
             Wrap(
               spacing: 4,
               runSpacing: 4,
-              children: folder.displayTags
-                  .take(3)
-                  .map(
-                    (t) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: Colors.black.withOpacity(0.05),
-                        ),
-                      ),
-                      child: Text(
-                        t,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
+              children: folder.displayTags.take(3).map((t) {
+                Color bg = Colors.white;
+                Color txt = Colors.grey.shade700;
+
+                if (tagColorResolver != null) {
+                  final catColor = tagColorResolver!(t);
+                  if (catColor != CupertinoColors.systemGrey) {
+                    bg = catColor.withOpacity(0.15);
+                    txt = catColor.withOpacity(1.0);
+                  }
+                }
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(4),
+                    border: bg == Colors.white
+                        ? Border.all(color: Colors.black.withOpacity(0.05))
+                        : null,
+                  ),
+                  child: Text(
+                    "#$t",
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: txt,
+                      fontWeight: FontWeight.w600,
                     ),
-                  )
-                  .toList(),
+                  ),
+                );
+              }).toList(),
             )
           else
-            const Text(
-              "No tags filtered",
-              style: TextStyle(fontSize: 10, color: Colors.grey),
-            ),
+            // FIXED: Use SizedBox instead of Text(" ")
+            const SizedBox(height: 18),
         ],
       ),
     );

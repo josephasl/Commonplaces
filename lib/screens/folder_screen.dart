@@ -34,8 +34,9 @@ class FolderScreen extends StatefulWidget {
 }
 
 class _FolderScreenState extends State<FolderScreen> {
-  late List<AppEntry> _allFolderEntries;
-  late Set<String> _activeTags;
+  // Initialize with empty defaults to prevent any LateInitializationError
+  List<AppEntry> _allFolderEntries = [];
+  Set<String> _activeTags = {};
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -44,6 +45,11 @@ class _FolderScreenState extends State<FolderScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize _activeTags based on the folder immediately
+    if (widget.folder.id != 'untagged_special_id') {
+      _activeTags = Set.from(widget.folder.displayTags);
+    }
+    // Load the actual data
     _refresh();
   }
 
@@ -54,17 +60,31 @@ class _FolderScreenState extends State<FolderScreen> {
   }
 
   void _refresh() {
-    if (!mounted) return;
-    setState(() {
-      if (widget.folder.id == 'untagged_special_id') {
-        _allFolderEntries = widget.storage.getUntaggedEntries();
-        _activeTags = {};
-      } else {
-        _allFolderEntries = widget.storage.getEntriesForFolder(widget.folder);
-        // Sync active tags with folder settings on refresh
-        _activeTags = Set.from(widget.folder.displayTags);
-      }
-    });
+    // If widget is not mounted, we can still set state if it's the first frame,
+    // but usually better to check.
+
+    final List<AppEntry> entries;
+    if (widget.folder.id == 'untagged_special_id') {
+      entries = widget.storage.getUntaggedEntries();
+    } else {
+      entries = widget.storage.getEntriesForFolder(widget.folder);
+    }
+
+    if (mounted) {
+      setState(() {
+        _allFolderEntries = entries;
+        // Re-sync tags if the folder definition changed externally
+        if (widget.folder.id != 'untagged_special_id') {
+          // We union to keep user selection if they unselected some,
+          // but for simplicity, let's reset to folder defaults on refresh
+          // so new tags appear.
+          _activeTags = Set.from(widget.folder.displayTags);
+        }
+      });
+    } else {
+      // Initialize for first build
+      _allFolderEntries = entries;
+    }
   }
 
   void _openFolderSettings() {
@@ -75,7 +95,7 @@ class _FolderScreenState extends State<FolderScreen> {
     final visible = widget.folder.visibleAttributes;
     final List<CupertinoActionSheetAction> actions = [];
 
-    // Date
+    // 1. DATE CREATED
     actions.add(
       CupertinoActionSheetAction(
         onPressed: () {
@@ -95,7 +115,7 @@ class _FolderScreenState extends State<FolderScreen> {
       ),
     );
 
-    // Title
+    // 2. TITLE
     if (visible.contains('title')) {
       actions.add(
         CupertinoActionSheetAction(
@@ -117,7 +137,7 @@ class _FolderScreenState extends State<FolderScreen> {
       );
     }
 
-    // Rating
+    // 3. RATING
     if (visible.contains('starRating')) {
       actions.add(
         CupertinoActionSheetAction(
@@ -139,7 +159,7 @@ class _FolderScreenState extends State<FolderScreen> {
       );
     }
 
-    // Notes
+    // 4. NOTES
     if (visible.contains('notes')) {
       actions.add(
         CupertinoActionSheetAction(
@@ -177,22 +197,29 @@ class _FolderScreenState extends State<FolderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<AppEntry> processedEntries = widget.folder.id == 'untagged_special_id'
-        ? _allFolderEntries
-        : _allFolderEntries.where((entry) {
-            final rawTag = entry.getAttribute('tag');
-            if (rawTag == null) return false;
-            List<String> entryTags = [];
-            if (rawTag is String)
-              entryTags = [rawTag];
-            else if (rawTag is List)
-              entryTags = List<String>.from(rawTag);
-            if (_activeTags.isEmpty) return false;
-            return entryTags.any((t) => _activeTags.contains(t));
-          }).toList();
+    // 1. FILTER
+    List<AppEntry> processedEntries = [];
 
-    // FIXED: Removed <String> generic call to prevent crashes if models aren't perfectly synced.
-    // Used .toString() instead for safety.
+    if (widget.folder.id == 'untagged_special_id') {
+      processedEntries = List.from(_allFolderEntries);
+    } else {
+      // Only show entries that have at least one tag in _activeTags
+      processedEntries = _allFolderEntries.where((entry) {
+        final rawTag = entry.getAttribute('tag');
+        if (rawTag == null) return false;
+
+        List<String> entryTags = [];
+        if (rawTag is String)
+          entryTags = [rawTag];
+        else if (rawTag is List)
+          entryTags = List<String>.from(rawTag);
+
+        if (_activeTags.isEmpty) return false;
+        return entryTags.any((t) => _activeTags.contains(t));
+      }).toList();
+    }
+
+    // 2. SEARCH
     if (_searchQuery.isNotEmpty) {
       processedEntries = processedEntries.where((entry) {
         final title = (entry.getAttribute('title') ?? '').toString();
@@ -203,6 +230,7 @@ class _FolderScreenState extends State<FolderScreen> {
       }).toList();
     }
 
+    // 3. SORT
     processedEntries.sort((a, b) {
       switch (_currentSort) {
         case EntrySortOption.dateCreatedNewest:
@@ -305,6 +333,7 @@ class _FolderScreenState extends State<FolderScreen> {
         children: [
           Column(
             children: [
+              // TAG FILTER BAR
               if (widget.folder.displayTags.isNotEmpty)
                 Container(
                   height: 50,
@@ -317,6 +346,9 @@ class _FolderScreenState extends State<FolderScreen> {
                     itemBuilder: (context, index) {
                       final tag = widget.folder.displayTags[index];
                       final isActive = _activeTags.contains(tag);
+                      // Safe Color Lookup
+                      final catColor = widget.storage.getTagColor(tag);
+
                       return GestureDetector(
                         onTap: () {
                           setState(() {
@@ -334,15 +366,18 @@ class _FolderScreenState extends State<FolderScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: isActive
-                                ? CupertinoColors.activeBlue
+                                ? catColor.withOpacity(0.2)
                                 : const Color(0xFFF2F2F7),
                             borderRadius: BorderRadius.circular(16),
+                            border: isActive
+                                ? Border.all(color: catColor)
+                                : null,
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            tag,
+                            "#$tag",
                             style: TextStyle(
-                              color: isActive ? Colors.white : Colors.black,
+                              color: catColor,
                               fontWeight: isActive
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -354,13 +389,15 @@ class _FolderScreenState extends State<FolderScreen> {
                     },
                   ),
                 ),
+
+              // GRID
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
                   child: processedEntries.isEmpty
                       ? const Center(
                           child: Text(
-                            "No matches found",
+                            "No entries found",
                             style: TextStyle(color: CupertinoColors.systemGrey),
                           ),
                         )
@@ -376,6 +413,7 @@ class _FolderScreenState extends State<FolderScreen> {
                             return EntryCard(
                               entry: processedEntries[index],
                               visibleAttributes: visibleAttrs,
+                              tagColorResolver: widget.storage.getTagColor,
                             );
                           },
                         ),
@@ -383,6 +421,8 @@ class _FolderScreenState extends State<FolderScreen> {
               ),
             ],
           ),
+
+          // FLOATING BAR
           Positioned(
             bottom: 20,
             left: 16,
@@ -406,7 +446,7 @@ class _FolderScreenState extends State<FolderScreen> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: "Search entries...",
+                        hintText: "Search...",
                         hintStyle: const TextStyle(color: Colors.grey),
                         prefixIcon: const Icon(
                           CupertinoIcons.search,
@@ -458,24 +498,18 @@ class _FolderScreenState extends State<FolderScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // ADD ENTRY
                 GestureDetector(
                   onTap: () async {
                     List<String>? prefillTags;
-                    if (widget.folder.displayTags.isNotEmpty) {
+                    if (widget.folder.displayTags.isNotEmpty)
                       prefillTags = List.from(widget.folder.displayTags);
-                    }
-
                     await showAddEntryDialog(
                       context,
                       widget.storage,
-                      _refresh, // Callback
+                      _refresh,
                       prefillTags: prefillTags,
                       restrictToAttributes: widget.folder.visibleAttributes,
                     );
-
-                    // Force refresh after await
                     _refresh();
                   },
                   child: Container(

@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'models.dart';
+import 'package:flutter/cupertino.dart';
 
 class StorageService {
   final Uuid _uuid = const Uuid();
@@ -9,32 +11,189 @@ class StorageService {
   static const String _foldersBoxName = 'folders_box';
   static const String _settingsBoxName = 'settings_box';
 
-  // Keys for Settings
   static const String _globalTagsKey = 'global_tags';
+  static const String _tagCategoriesKey = 'tag_categories';
+  static const String _tagMappingKey = 'tag_mapping';
   static const String _expandedEntryAttributesKey = 'expanded_entry_attributes';
+
+  static const String _defaultCategoryId = 'default_grey_cat';
 
   Future<void> init() async {
     await Hive.initFlutter();
     await Hive.openBox(_entriesBoxName);
     await Hive.openBox(_foldersBoxName);
     await Hive.openBox(_settingsBoxName);
+    _ensureDefaultCategory();
   }
 
-  // ==========================================
-  // ENTRY OPERATIONS
-  // ==========================================
+  void _ensureDefaultCategory() {
+    final cats = getTagCategories();
+    if (!cats.any((c) => c.id == _defaultCategoryId)) {
+      final defaultCat = TagCategory(
+        id: _defaultCategoryId,
+        name: 'Uncategorized',
+        colorIndex: 0,
+        iconIndex: 0,
+        sortOrder: 9999, // Put at bottom by default
+      );
+      saveTagCategory(defaultCat);
+    }
+  }
 
+  // --- UPDATED: Return sorted list ---
+  List<TagCategory> getTagCategories() {
+    final raw = _settingsBox.get(_tagCategoriesKey, defaultValue: []);
+    if (raw is List) {
+      final list = raw
+          .map((e) {
+            try {
+              return TagCategory.fromJson(Map<String, dynamic>.from(e));
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<TagCategory>()
+          .toList();
+
+      // Sort by sortOrder
+      list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      return list;
+    }
+    return [];
+  }
+
+  Future<void> saveTagCategory(TagCategory cat) async {
+    String cleanName = cat.name.trim();
+    if (cleanName.isNotEmpty) {
+      cleanName = "${cleanName[0].toUpperCase()}${cleanName.substring(1)}";
+    }
+
+    // Get existing categories to determine sort order if new
+    final cats = getTagCategories();
+    final index = cats.indexWhere((c) => c.id == cat.id);
+
+    // Preserve existing sort order if updating, else put at end
+    int order = cat.sortOrder;
+    if (index == -1 && order == 0) {
+      // New Item: Set order to last
+      order = cats.isNotEmpty ? (cats.last.sortOrder + 1) : 0;
+    }
+
+    final formattedCat = TagCategory(
+      id: cat.id,
+      name: cleanName,
+      colorIndex: cat.colorIndex,
+      iconIndex: cat.iconIndex,
+      sortOrder: order,
+    );
+
+    if (index >= 0) {
+      cats[index] = formattedCat;
+    } else {
+      cats.add(formattedCat);
+    }
+
+    // Sort before saving just in case
+    cats.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+    await _settingsBox.put(
+      _tagCategoriesKey,
+      cats.map((e) => e.toJson()).toList(),
+    );
+  }
+
+  // --- NEW: REORDER LOGIC ---
+  Future<void> reorderTagCategories(int oldIndex, int newIndex) async {
+    final cats = getTagCategories();
+
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final item = cats.removeAt(oldIndex);
+    cats.insert(newIndex, item);
+
+    // Update sortOrder for ALL items to match new index
+    final updatedCats = <TagCategory>[];
+    for (int i = 0; i < cats.length; i++) {
+      final c = cats[i];
+      updatedCats.add(
+        TagCategory(
+          id: c.id,
+          name: c.name,
+          colorIndex: c.colorIndex,
+          iconIndex: c.iconIndex,
+          sortOrder: i, // Reset order based on list position
+        ),
+      );
+    }
+
+    await _settingsBox.put(
+      _tagCategoriesKey,
+      updatedCats.map((e) => e.toJson()).toList(),
+    );
+  }
+
+  Future<void> deleteTagCategory(String catId) async {
+    if (catId == _defaultCategoryId) return;
+    final cats = getTagCategories();
+    cats.removeWhere((c) => c.id == catId);
+    await _settingsBox.put(
+      _tagCategoriesKey,
+      cats.map((e) => e.toJson()).toList(),
+    );
+
+    final mapping = getTagMapping();
+    final keysToReset = mapping.entries
+        .where((e) => e.value == catId)
+        .map((e) => e.key)
+        .toList();
+    for (var k in keysToReset) {
+      mapping[k] = _defaultCategoryId;
+    }
+    await _settingsBox.put(_tagMappingKey, mapping);
+  }
+
+  // ... [getTagColor, getTagMapping, setTagCategory etc. remain EXACTLY as they were in the previous working version] ...
+  Map<String, String> getTagMapping() {
+    final raw = _settingsBox.get(_tagMappingKey, defaultValue: {});
+    return Map<String, String>.from(raw);
+  }
+
+  Future<void> setTagCategory(String tag, String categoryId) async {
+    final mapping = getTagMapping();
+    mapping[tag] = categoryId;
+    await _settingsBox.put(_tagMappingKey, mapping);
+  }
+
+  Color getTagColor(String tag) {
+    final cats = getTagCategories();
+    if (cats.isEmpty) return CupertinoColors.systemGrey;
+    final mapping = getTagMapping();
+    final catId = mapping[tag] ?? _defaultCategoryId;
+    final cat = cats.firstWhere(
+      (c) => c.id == catId,
+      orElse: () => cats.firstWhere(
+        (c) => c.id == _defaultCategoryId,
+        orElse: () => cats.first,
+      ),
+    );
+    int idx = cat.colorIndex;
+    if (idx < 0 || idx >= AppConstants.categoryColors.length) idx = 0;
+    return AppConstants.categoryColors[idx];
+  }
+
+  // ... [Standard Operations: Box getters, getAllEntries, etc. Copy from previous stable file if needed] ...
   Box get _entriesBox => Hive.box(_entriesBoxName);
+  Box get _foldersBox => Hive.box(_foldersBoxName);
+  Box get _settingsBox => Hive.box(_settingsBoxName);
 
   List<AppEntry> getAllEntries() {
     final data = _entriesBox.values;
-    return data.map((e) {
-      final jsonMap = Map<String, dynamic>.from(e);
-      return AppEntry.fromJson(jsonMap);
-    }).toList();
+    return data
+        .map((e) => AppEntry.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
-  /// Creates a blank entry with automatic timestamps
   AppEntry createNewEntry() {
     final now = DateTime.now().toIso8601String();
     return AppEntry(
@@ -43,136 +202,83 @@ class StorageService {
     );
   }
 
-  /// Saves an entry and performs automatic updates:
-  /// 1. Updates 'dateEdited' on the entry.
-  /// 2. Updates 'lastAddedTo' on any Folder that includes this entry's tags.
   Future<void> saveEntry(AppEntry entry) async {
-    // 1. Auto-update 'dateEdited'
     entry.setAttribute('dateEdited', DateTime.now().toIso8601String());
-
-    // 2. Save the entry to Hive
     await _entriesBox.put(entry.id, entry.toJson());
-
-    // 3. Update 'lastAddedTo' for relevant folders
     await _updateFoldersContainingEntry(entry);
   }
 
-  Future<void> deleteEntry(String id) async {
-    await _entriesBox.delete(id);
-  }
-
-  // ==========================================
-  // FOLDER OPERATIONS
-  // ==========================================
-
-  Box get _foldersBox => Hive.box(_foldersBoxName);
+  Future<void> deleteEntry(String id) async => await _entriesBox.delete(id);
 
   List<AppFolder> getAllFolders() {
     final data = _foldersBox.values;
-    return data.map((e) {
-      final jsonMap = Map<String, dynamic>.from(e);
-      return AppFolder.fromJson(jsonMap);
-    }).toList();
+    return data
+        .map((e) => AppFolder.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
-  /// Creates a new folder with automatic timestamps
   AppFolder createNewFolder() {
     final now = DateTime.now().toIso8601String();
     return AppFolder(
       id: _uuid.v4(),
       attributes: {
         'dateCreated': now,
-        'lastAddedTo': now, // Initially same as created
+        'lastAddedTo': now,
         'displayTags': <String>[],
       },
     );
   }
 
-  Future<void> saveFolder(AppFolder folder) async {
-    await _foldersBox.put(folder.id, folder.toJson());
-  }
+  Future<void> saveFolder(AppFolder folder) async =>
+      await _foldersBox.put(folder.id, folder.toJson());
+  Future<void> deleteFolder(String id) async => await _foldersBox.delete(id);
 
-  Future<void> deleteFolder(String id) async {
-    await _foldersBox.delete(id);
-  }
-
-  // ==========================================
-  // INTERNAL HELPERS (Automatic Logic)
-  // ==========================================
-
-  /// Checks if any folder cares about the tags in this entry.
-  /// If so, updates that folder's 'lastAddedTo' date.
   Future<void> _updateFoldersContainingEntry(AppEntry entry) async {
-    // Get tags from entry safely
     final rawTag = entry.getAttribute('tag');
     List<String> entryTags = [];
-    if (rawTag is String) {
+    if (rawTag is String)
       entryTags = [rawTag];
-    } else if (rawTag is List) {
+    else if (rawTag is List)
       entryTags = List<String>.from(rawTag);
-    }
-
     if (entryTags.isEmpty) return;
 
     final allFolders = getAllFolders();
     final now = DateTime.now().toIso8601String();
-
     for (var folder in allFolders) {
-      // Check for intersection: Does the folder filter for ANY of the entry's tags?
-      final folderTags = folder.displayTags;
-      bool isRelevant = folderTags.any((t) => entryTags.contains(t));
-
-      if (isRelevant) {
+      if (folder.displayTags.any((t) => entryTags.contains(t))) {
         folder.setAttribute('lastAddedTo', now);
-        // We use the internal put directly to avoid infinite recursion
         await _foldersBox.put(folder.id, folder.toJson());
       }
     }
   }
 
-  // ==========================================
-  // QUERY HELPER
-  // ==========================================
-
   List<AppEntry> getEntriesForFolder(AppFolder folder) {
     final allEntries = getAllEntries();
-    final folderTags = folder.displayTags;
-
-    if (folderTags.isEmpty) return [];
-
+    if (folder.displayTags.isEmpty) return [];
     return allEntries.where((entry) {
       final rawTag = entry.getAttribute('tag');
       if (rawTag == null) return false;
-
       List<String> entryTags = [];
-      if (rawTag is String) {
+      if (rawTag is String)
         entryTags = [rawTag];
-      } else if (rawTag is List) {
+      else if (rawTag is List)
         entryTags = List<String>.from(rawTag);
-      }
-
-      return entryTags.any((t) => folderTags.contains(t));
+      return entryTags.any((t) => folder.displayTags.contains(t));
     }).toList();
   }
 
-  // ==========================================
-  // SETTINGS & TAG OPERATIONS
-  // ==========================================
-
-  Box get _settingsBox => Hive.box(_settingsBoxName);
-
-  List<String> getGlobalTags() {
-    return _settingsBox
-            .get(_globalTagsKey, defaultValue: <String>[])
-            ?.cast<String>() ??
-        [];
-  }
+  List<String> getGlobalTags() =>
+      _settingsBox
+          .get(_globalTagsKey, defaultValue: <String>[])
+          ?.cast<String>() ??
+      [];
 
   Future<void> addGlobalTag(String tag) async {
     final currentTags = getGlobalTags();
     if (!currentTags.contains(tag)) {
       currentTags.add(tag);
       await _settingsBox.put(_globalTagsKey, currentTags);
+      await setTagCategory(tag, _defaultCategoryId);
     }
   }
 
@@ -180,54 +286,49 @@ class StorageService {
     final currentTags = getGlobalTags();
     currentTags.remove(tag);
     await _settingsBox.put(_globalTagsKey, currentTags);
+    final mapping = getTagMapping();
+    mapping.remove(tag);
+    await _settingsBox.put(_tagMappingKey, mapping);
   }
 
   Future<void> renameGlobalTag(String oldTag, String newTag) async {
     if (oldTag == newTag) return;
-
-    // 1. Update all Folders that use this tag
     final allFolders = getAllFolders();
-    for (var folder in allFolders) {
-      final displayTags = folder.displayTags;
-      if (displayTags.contains(oldTag)) {
-        final tagIndex = displayTags.indexOf(oldTag);
-        displayTags[tagIndex] = newTag;
-        folder.setAttribute('displayTags', displayTags);
-        await saveFolder(folder);
+    for (var f in allFolders) {
+      if (f.displayTags.contains(oldTag)) {
+        f.displayTags[f.displayTags.indexOf(oldTag)] = newTag;
+        await saveFolder(f);
       }
     }
-
-    // 2. Update all Entries that use this tag
     final allEntries = getAllEntries();
-    for (var entry in allEntries) {
-      final rawVal = entry.getAttribute('tag');
-      List<String> tags = [];
-      if (rawVal is String) {
-        tags = [rawVal];
-      } else if (rawVal is List) {
-        tags = List<String>.from(rawVal);
-      }
-
+    for (var e in allEntries) {
+      final rawVal = e.getAttribute('tag');
+      List<String> tags = (rawVal is String)
+          ? [rawVal]
+          : (rawVal is List ? List<String>.from(rawVal) : []);
       if (tags.contains(oldTag)) {
-        final index = tags.indexOf(oldTag);
-        tags[index] = newTag;
-        entry.setAttribute('tag', tags);
-        await saveEntry(entry);
+        tags[tags.indexOf(oldTag)] = newTag;
+        e.setAttribute('tag', tags);
+        await saveEntry(e);
       }
     }
-
-    // 3. Update the Global List (Move to end to represent "Edit Date")
     final currentTags = getGlobalTags();
     if (currentTags.contains(oldTag)) {
-      currentTags.remove(oldTag); // Remove from old position
-      currentTags.add(newTag); // Add to end (Newest)
+      currentTags.remove(oldTag);
+      currentTags.add(newTag);
       await _settingsBox.put(_globalTagsKey, currentTags);
+      final mapping = getTagMapping();
+      if (mapping.containsKey(oldTag)) {
+        final catId = mapping[oldTag]!;
+        mapping.remove(oldTag);
+        mapping[newTag] = catId;
+        await _settingsBox.put(_tagMappingKey, mapping);
+      }
     }
   }
 
   List<AppEntry> getUntaggedEntries() {
-    final allEntries = getAllEntries();
-    return allEntries.where((entry) {
+    return getAllEntries().where((entry) {
       final rawTag = entry.getAttribute('tag');
       if (rawTag == null) return true;
       if (rawTag is String) return rawTag.trim().isEmpty;
@@ -236,32 +337,16 @@ class StorageService {
     }).toList();
   }
 
-  // ==========================================
-  // UI PREFERENCES (Expansion States)
-  // ==========================================
-
   List<String> getExpandedEntryAttributes() {
-    final dynamic rawData = _settingsBox.get(
+    final raw = _settingsBox.get(
       _expandedEntryAttributesKey,
       defaultValue: ['title', 'tag', 'dateCompleted'],
     );
-
-    if (rawData is List) {
-      return rawData.map((e) => e.toString()).toList();
-    }
+    if (raw is List) return raw.map((e) => e.toString()).toList();
     return ['title', 'tag', 'dateCompleted'];
   }
 
   Future<void> saveExpandedAttributes(List<String> keys) async {
     await _settingsBox.put(_expandedEntryAttributesKey, keys);
-  }
-
-  // ==========================================
-  // DEV TOOLS
-  // ==========================================
-
-  Future<void> clearAllData() async {
-    await _entriesBox.clear();
-    await _foldersBox.clear();
   }
 }

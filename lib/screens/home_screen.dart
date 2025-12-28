@@ -25,6 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   SortOption _folderSort = SortOption.updatedNewest;
 
+  // Category Filter State
+  String _selectedFilterCategoryId = 'ALL';
+
   List<AppFolder> _folders = [];
   bool _isEditing = false;
 
@@ -74,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _folderCounts[folder.id] = count;
       }
 
+      // If the currently open folder was deleted, close it
       if (_lastOpenedFolder != null) {
         final exists =
             _folders.any((f) => f.id == _lastOpenedFolder!.id) ||
@@ -181,6 +185,25 @@ class _HomeScreenState extends State<HomeScreen> {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
     );
+
+    // NAVIGATION FIX: If leaving the folder view, clear the folder state
+    // after the animation finishes. This forces a fresh reload next time.
+  }
+
+  void _openFolder(AppFolder folder) {
+    setState(() {
+      _lastOpenedFolder = folder;
+      // Wait for the state to update so the PageView has 3 children
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            2,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    });
   }
 
   @override
@@ -203,13 +226,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final List<BottomNavigationBarItem> navItems = [
       const BottomNavigationBarItem(
-        icon: Icon(CupertinoIcons.tag),
-        activeIcon: Icon(CupertinoIcons.tag_fill),
-        label: "Tags",
+        // The '#' symbol in iOS style
+        icon: Icon(CupertinoIcons.number),
+        activeIcon: Icon(CupertinoIcons.number),
+        label: "Tags", // Label string is required but will be hidden
       ),
       const BottomNavigationBarItem(
         icon: Icon(CupertinoIcons.home),
-        activeIcon: Icon(CupertinoIcons.house_fill),
+        activeIcon: Icon(CupertinoIcons.house),
         label: "Home",
       ),
     ];
@@ -217,8 +241,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_lastOpenedFolder != null) {
       navItems.add(
         const BottomNavigationBarItem(
-          icon: Icon(CupertinoIcons.folder),
-          activeIcon: Icon(CupertinoIcons.folder_solid),
+          // Rounded Square
+          icon: Icon(CupertinoIcons.square_fill),
+          activeIcon: Icon(CupertinoIcons.square_fill),
           label: "Folder",
         ),
       );
@@ -232,7 +257,6 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const BouncingScrollPhysics(),
         children: pages,
       ),
-      // No floatingActionButton here - handled by individual pages (Stacks)
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -251,16 +275,12 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 0,
             selectedItemColor: CupertinoColors.activeBlue,
             unselectedItemColor: CupertinoColors.systemGrey,
-            selectedLabelStyle: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.2,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -0.2,
-            ),
+
+            // --- HIDE LABELS ---
+            showSelectedLabels: false,
+            showUnselectedLabels: false,
+
+            // -------------------
             type: BottomNavigationBarType.fixed,
             items: navItems,
           ),
@@ -272,6 +292,20 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHomeBody() {
     List<AppFolder> displayFolders = List.from(_folders);
 
+    // 1. FILTER BY CATEGORY
+    if (_selectedFilterCategoryId != 'ALL') {
+      final mapping = _storage.getTagMapping();
+      displayFolders = displayFolders.where((f) {
+        if (f.displayTags.isEmpty) return false;
+
+        return f.displayTags.any((t) {
+          final catId = mapping[t] ?? 'default_grey_cat';
+          return catId == _selectedFilterCategoryId;
+        });
+      }).toList();
+    }
+
+    // 2. SEARCH
     if (_searchQuery.isNotEmpty) {
       displayFolders = displayFolders.where((f) {
         final title = f.getAttribute<String>('title') ?? '';
@@ -279,6 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList();
     }
 
+    // 3. SORT
     displayFolders.sort((a, b) {
       switch (_folderSort) {
         case SortOption.nameAsc:
@@ -320,9 +355,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
+    // 4. UNTAGGED FOLDER
     AppFolder? untaggedFolder;
-    if (_searchQuery.isEmpty ||
-        "untagged".contains(_searchQuery.toLowerCase())) {
+    bool showUntagged =
+        _searchQuery.isEmpty || "untagged".contains(_searchQuery.toLowerCase());
+
+    // Hide untagged if filtering by a specific category (except All)
+    if (_selectedFilterCategoryId != 'ALL') {
+      showUntagged = false;
+    }
+
+    if (showUntagged) {
       untaggedFolder = AppFolder(
         id: 'untagged_special_id',
         attributes: {
@@ -337,6 +380,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ...displayFolders,
       if (untaggedFolder != null) untaggedFolder,
     ];
+
+    final categories = _storage.getTagCategories();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -380,27 +425,61 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          GestureDetector(
-            onTap: () {
-              if (_isEditing) setState(() => _isEditing = false);
-            },
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
-              child: MasonryGridView.count(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // CATEGORY CHIPS
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
+                  children: [
+                    _buildFilterChip(
+                      'ALL',
+                      'All',
+                      Colors.black,
+                      Icons.grid_view,
+                    ),
+                    ...categories.map((cat) {
+                      return _buildFilterChip(
+                        cat.id,
+                        cat.name,
+                        AppConstants.categoryColors[cat.colorIndex],
+                        AppConstants.categoryIcons[cat.iconIndex],
+                      );
+                    }).toList(),
+                  ],
                 ),
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                itemCount: allItems.length,
-                itemBuilder: (context, index) {
-                  final item = allItems[index];
-                  return _buildFolderItem(item);
-                },
               ),
-            ),
+
+              // GRID
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (_isEditing) setState(() => _isEditing = false);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+                    child: MasonryGridView.count(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      itemCount: allItems.length,
+                      itemBuilder: (context, index) {
+                        final item = allItems[index];
+                        return _buildFolderItem(item);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+
+          // FLOATING BOTTOM BAR
           Positioned(
             bottom: 20,
             left: 16,
@@ -506,28 +585,66 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFilterChip(String id, String label, Color color, IconData icon) {
+    final isSelected = _selectedFilterCategoryId == id;
+    final bgColor = isSelected ? color : Colors.grey.shade100;
+    final textColor = isSelected ? Colors.white : Colors.grey.shade800;
+
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilterCategoryId = id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected ? null : Border.all(color: Colors.grey.shade300),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? Colors.white : color.withOpacity(0.7),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFolderItem(AppFolder folder) {
     final count = _folderCounts[folder.id] ?? 0;
     final isUntaggedFolder = folder.id == 'untagged_special_id';
 
     if (isUntaggedFolder) {
       return GestureDetector(
-        onTap: () {
-          setState(() => _lastOpenedFolder = folder);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_pageController.hasClients) {
-              _pageController.animateToPage(
-                2,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            }
-          });
-        },
+        onTap: () => _openFolder(folder),
         child: FolderCard(
           folder: folder,
           color: const Color(0xFFF2F2F7),
           entryCount: count,
+          tagColorResolver: _storage.getTagColor, // Pass color resolver
         ),
       );
     }
@@ -537,25 +654,19 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () {
         if (_isEditing)
           setState(() => _isEditing = false);
-        else {
-          setState(() => _lastOpenedFolder = folder);
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_pageController.hasClients) {
-              _pageController.animateToPage(
-                2,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-            }
-          });
-        }
+        else
+          _openFolder(folder);
       },
       child: Shakeable(
         enabled: _isEditing,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            FolderCard(folder: folder, entryCount: count),
+            FolderCard(
+              folder: folder,
+              entryCount: count,
+              tagColorResolver: _storage.getTagColor, // Pass color resolver
+            ),
             if (_isEditing)
               Positioned(
                 top: -8,
