@@ -59,10 +59,7 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
           // Only show "Add Category" if we are on the first tab (Tags)
           if (_tabController.index == 0)
             IconButton(
-              icon: const Icon(
-                CupertinoIcons.folder_badge_plus,
-                color: Colors.black,
-              ),
+              icon: const Icon(CupertinoIcons.add, color: Colors.black),
               tooltip: "New Category",
               onPressed: () =>
                   showAddCategoryDialog(context, widget.storage, _refresh),
