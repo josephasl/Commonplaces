@@ -73,7 +73,7 @@ class _EntryScreenState extends State<EntryScreen> {
             actions: [
               IconButton(
                 icon: const Icon(
-                  CupertinoIcons.pencil,
+                  CupertinoIcons.ellipsis,
                   color: Colors.black,
                   size: 20,
                 ),

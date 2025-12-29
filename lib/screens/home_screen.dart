@@ -92,32 +92,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _deleteFolder(AppFolder folder) async {
-    final confirm = await showCupertinoDialog<bool>(
+  void _deleteFolder(AppFolder folder) {
+    showDeleteConfirmationDialog(
       context: context,
-      builder: (c) => CupertinoAlertDialog(
-        title: const Text("Delete Folder?"),
-        content: const Text(
-          "This will delete the folder but NOT the entries inside it.",
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(c, false),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.pop(c, true),
-            child: const Text("Delete"),
-          ),
-        ],
-      ),
+      title: "Delete Folder?",
+      message: "Delete '${folder.getAttribute('title')}'?",
+      subtitle: "This will delete the folder but NOT the entries inside it.",
+      onConfirm: () async {
+        await _storage.deleteFolder(folder.id);
+        _refreshData();
+      },
     );
-
-    if (confirm == true) {
-      await _storage.deleteFolder(folder.id);
-      _refreshData();
-    }
   }
 
   void _showFolderSortSheet() {

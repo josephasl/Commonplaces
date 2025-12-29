@@ -29,299 +29,8 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
     widget.onUpdate?.call();
   }
 
-  // --- 1. Tag Options Sheet (Now matches 'Move Tag' style) ---
-  void _showTagOptions(String tag) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => _buildBottomSheet(
-        context: context,
-        title: "Manage Tag",
-        hideSave: true, // No save button, just a list of actions
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Center(
-                child: Text(
-                  "#$tag",
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-            ),
-            _buildOptionTile(
-              icon: CupertinoIcons.pencil,
-              label: "Rename Tag",
-              color: Colors.black,
-              onTap: () {
-                Navigator.pop(ctx);
-                _showRenameSheet(tag);
-              },
-            ),
-            const Divider(height: 1),
-            _buildOptionTile(
-              icon: CupertinoIcons.folder_badge_plus,
-              label: "Move to Category",
-              color: Colors.black,
-              onTap: () {
-                Navigator.pop(ctx);
-                showMoveTagDialog(context, widget.storage, tag, _refresh);
-              },
-            ),
-            const Divider(height: 1),
-            _buildOptionTile(
-              icon: CupertinoIcons.trash,
-              label: "Delete Tag",
-              color: CupertinoColors.destructiveRed,
-              onTap: () {
-                Navigator.pop(ctx);
-                _showDeleteConfirm(tag);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptionTile({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              CupertinoIcons.right_chevron,
-              color: Colors.grey.shade400,
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- 2. Rename Tag (Matches 'New Category' style) ---
-  void _showRenameSheet(String oldTag) {
-    final controller = TextEditingController(text: oldTag);
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => _buildBottomSheet(
-        context: context,
-        title: "Rename Tag",
-        onSave: () async {
-          if (controller.text.isNotEmpty && controller.text != oldTag) {
-            await widget.storage.renameGlobalTag(oldTag, controller.text);
-            _refresh();
-            if (context.mounted) Navigator.pop(ctx);
-          }
-        },
-        child: Column(
-          children: [
-            CupertinoTextField(
-              controller: controller,
-              placeholder: "New Name",
-              padding: const EdgeInsets.all(12),
-              autofocus: true,
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemGrey6,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              onSubmitted: (_) async {
-                if (controller.text.isNotEmpty && controller.text != oldTag) {
-                  await widget.storage.renameGlobalTag(oldTag, controller.text);
-                  _refresh();
-                  if (context.mounted) Navigator.pop(ctx);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- 3. Add Tag (Matches 'New Category' style) ---
-  void _showAddTagSheet() {
-    final controller = TextEditingController();
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => _buildBottomSheet(
-        context: context,
-        title: "New Tag",
-        onSave: () async {
-          if (controller.text.isNotEmpty) {
-            await widget.storage.addGlobalTag(controller.text);
-            _refresh();
-            if (context.mounted) Navigator.pop(ctx);
-          }
-        },
-        child: Column(
-          children: [
-            CupertinoTextField(
-              controller: controller,
-              placeholder: "Tag Name",
-              padding: const EdgeInsets.all(12),
-              autofocus: true,
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemGrey6,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              onSubmitted: (_) async {
-                if (controller.text.isNotEmpty) {
-                  await widget.storage.addGlobalTag(controller.text);
-                  _refresh();
-                  if (context.mounted) Navigator.pop(ctx);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- Helper: Shared Bottom Sheet Builder (Matches dialogs.dart) ---
-  Widget _buildBottomSheet({
-    required BuildContext context,
-    required String title,
-    Widget? child,
-    VoidCallback? onSave,
-    bool hideSave = false,
-  }) {
-    return Padding(
-      // Handle keyboard
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        // Dynamic height, max 90%
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        decoration: const BoxDecoration(
-          color: CupertinoColors.systemBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            mainAxisSize: MainAxisSize.min, // Shrink to fit content
-            children: [
-              // Drag Handle
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      child: const Text("Cancel"),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 17,
-                      ),
-                    ),
-                    if (!hideSave)
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: onSave,
-                        child: const Text(
-                          "Save",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 50),
-                  ],
-                ),
-              ),
-              Container(height: 1, color: Colors.grey.shade200),
-              // Scrollable Content
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      if (child != null) child,
-                      const SizedBox(height: 24), // Extra bottom padding
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteConfirm(String tag) {
-    showCupertinoDialog(
-      context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text("Delete Tag?"),
-        content: Text("Delete #$tag? It will be removed from all entries."),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(ctx),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text("Delete"),
-            onPressed: () async {
-              await widget.storage.removeGlobalTag(tag);
-              _refresh();
-              if (context.mounted) Navigator.pop(ctx);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // 1. Get Data
     final categories = widget.storage.getTagCategories();
     final mapping = widget.storage.getTagMapping();
     final allTags = widget.storage.getGlobalTags();
@@ -334,7 +43,7 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
           .toList();
     }
 
-    // 2. Group Tags
+    // Group Tags
     final Map<String, List<String>> grouped = {};
     for (var cat in categories) {
       grouped[cat.id] = [];
@@ -351,7 +60,6 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
       }
     }
 
-    // 3. Build UI
     return Stack(
       children: [
         ReorderableListView.builder(
@@ -425,8 +133,9 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                           ),
                         ),
                         const Spacer(),
-                        // Category Actions
-                        if (cat.id != 'default_grey_cat') ...[
+
+                        // --- UPDATED ACTIONS: Single Ellipsis Button ---
+                        if (cat.id != 'default_grey_cat')
                           GestureDetector(
                             onTap: () => showEditCategoryDialog(
                               context,
@@ -434,49 +143,21 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                               cat,
                               _refresh,
                             ),
-                            child: const Icon(
-                              CupertinoIcons.pencil,
-                              size: 18,
-                              color: Colors.grey,
+                            // Ellipsis icon inside a circle for better touch target
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors
+                                    .transparent, // or a light grey if you want bg
+                              ),
+                              child: const Icon(
+                                CupertinoIcons.ellipsis,
+                                size: 20,
+                                color: Colors.grey,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          GestureDetector(
-                            onTap: () {
-                              showCupertinoDialog(
-                                context: context,
-                                builder: (c) => CupertinoAlertDialog(
-                                  title: const Text("Delete Category?"),
-                                  content: Text(
-                                    "Delete '${cat.name}'? Tags inside will become Uncategorized.",
-                                  ),
-                                  actions: [
-                                    CupertinoDialogAction(
-                                      child: const Text("Cancel"),
-                                      onPressed: () => Navigator.pop(c),
-                                    ),
-                                    CupertinoDialogAction(
-                                      isDestructiveAction: true,
-                                      child: const Text("Delete"),
-                                      onPressed: () async {
-                                        Navigator.pop(c);
-                                        await widget.storage.deleteTagCategory(
-                                          cat.id,
-                                        );
-                                        _refresh();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            child: const Icon(
-                              CupertinoIcons.trash,
-                              size: 18,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -500,7 +181,12 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                                 size: 16,
                                 color: Colors.grey,
                               ),
-                              onTap: () => _showTagOptions(tag),
+                              onTap: () => showTagOptionsDialog(
+                                context,
+                                widget.storage,
+                                tag,
+                                _refresh,
+                              ),
                             ),
                           )
                           .toList(),
@@ -561,9 +247,9 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              // --- UPDATED ADD BUTTON ---
               GestureDetector(
-                onTap: _showAddTagSheet,
+                onTap: () =>
+                    showAddTagDialog(context, widget.storage, _refresh),
                 child: Container(
                   height: 50,
                   width: 50,

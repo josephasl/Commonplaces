@@ -428,6 +428,19 @@ class StorageService {
     );
   }
 
+  Future<void> updateCustomAttribute(AttributeDefinition updatedAttr) async {
+    final list = getCustomAttributes();
+    final index = list.indexWhere((a) => a.key == updatedAttr.key);
+
+    if (index != -1) {
+      list[index] = updatedAttr; // Replace with new version
+      await _settingsBox.put(
+        _customAttributesKey,
+        list.map((e) => e.toJson()).toList(),
+      );
+    }
+  }
+
   Future<void> deleteCustomAttribute(String key) async {
     final list = getCustomAttributes();
     list.removeWhere((e) => e.key == key);

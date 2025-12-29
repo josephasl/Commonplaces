@@ -314,7 +314,7 @@ class _FolderScreenState extends State<FolderScreen> {
           if (widget.folder.id != 'untagged_special_id')
             IconButton(
               icon: const Icon(
-                CupertinoIcons.pencil,
+                CupertinoIcons.ellipsis,
                 color: Colors.black,
                 size: 20,
               ),

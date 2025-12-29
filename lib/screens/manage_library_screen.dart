@@ -5,6 +5,7 @@ import '../attributes.dart';
 import '../models.dart';
 import '../dialogs.dart';
 import 'edit_tags_screen.dart';
+import '../dialogs.dart'; // Ensure this is imported
 
 class ManageLibraryScreen extends StatefulWidget {
   final StorageService storage;
@@ -59,7 +60,10 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
           // Only show "Add Category" if we are on the first tab (Tags)
           if (_tabController.index == 0)
             IconButton(
-              icon: const Icon(CupertinoIcons.add, color: Colors.black),
+              icon: const Icon(
+                CupertinoIcons.folder_badge_plus,
+                color: Colors.black,
+              ),
               tooltip: "New Category",
               onPressed: () =>
                   showAddCategoryDialog(context, widget.storage, _refresh),
@@ -106,6 +110,7 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
                     Tab(text: "Group Tags"),
                     Tab(text: "Custom Attributes"),
                   ],
+                  dividerColor: Colors.transparent,
                 ),
               ),
             ],
@@ -114,6 +119,7 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
       ),
       body: TabBarView(
         controller: _tabController,
+
         children: [
           // TAB 1: TAGS
           EditTagsScreen(storage: widget.storage, onUpdate: widget.onUpdate),
@@ -197,13 +203,18 @@ class _AttributesManagerState extends State<_AttributesManager> {
                       subtitle: Text("Type: ${attr.type.name.toUpperCase()}"),
                       trailing: IconButton(
                         icon: const Icon(
-                          CupertinoIcons.trash,
+                          CupertinoIcons.ellipsis, // Changed to Ellipsis
                           size: 18,
-                          color: Colors.red,
+                          color: Colors.grey, // Changed color to grey
                         ),
-                        onPressed: () async {
-                          await widget.storage.deleteCustomAttribute(attr.key);
-                          _refresh();
+                        // --- UPDATED ACTION ---
+                        onPressed: () {
+                          showAttributeOptionsDialog(
+                            context,
+                            widget.storage,
+                            attr,
+                            _refresh,
+                          );
                         },
                       ),
                     ),
