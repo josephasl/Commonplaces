@@ -29,278 +29,58 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
     widget.onUpdate?.call();
   }
 
-  // --- UPDATED: Tag Options (Custom Bottom Sheet) ---
+  // --- 1. Tag Options Sheet (Now matches 'Move Tag' style) ---
   void _showTagOptions(String tag) {
     showCupertinoModalPopup(
       context: context,
-      builder: (ctx) => Container(
-        // Set a fixed height or let it wrap content.
-        // Using wrap (mainAxisSize.min) feels more natural for a short menu.
-        decoration: const BoxDecoration(
-          color: CupertinoColors.systemBackground,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false, // Don't need top safe area inside the sheet
-            child: Column(
-              mainAxisSize: MainAxisSize.min, // Wrap content
-              children: [
-                // HEADER
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        child: const Text("Cancel"),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                      Expanded(
-                        child: Text(
-                          "Manage Tag: #$tag",
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 17,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 60), // Spacer to balance "Cancel"
-                    ],
-                  ),
-                ),
-                const Divider(height: 1, thickness: 1),
-
-                // OPTIONS LIST
-                ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.pencil,
-                    color: Colors.black,
-                  ),
-                  title: const Text("Rename Tag"),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showRenameSheet(tag);
-                  },
-                ),
-                const Divider(height: 1, indent: 56), // Separator
-                ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.folder_badge_plus,
-                    color: Colors.black,
-                  ),
-                  title: const Text("Move to Category"),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    showMoveTagDialog(context, widget.storage, tag, _refresh);
-                  },
-                ),
-                const Divider(height: 1, indent: 56), // Separator
-                ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.trash,
-                    color: CupertinoColors.destructiveRed,
-                  ),
-                  title: const Text(
-                    "Delete Tag",
-                    style: TextStyle(color: CupertinoColors.destructiveRed),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _showDeleteConfirm(tag);
-                  },
-                ),
-                const SizedBox(height: 20), // Bottom padding
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- Rename Tag (Bottom Sheet Style) ---
-  void _showRenameSheet(String oldTag) {
-    final controller = TextEditingController(text: oldTag);
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => _buildInputBottomSheet(
-        title: "Rename Tag",
-        actionLabel: "Save",
-        controller: controller,
-        placeholder: "New Name",
-        onSave: () async {
-          if (controller.text.isNotEmpty && controller.text != oldTag) {
-            await widget.storage.renameGlobalTag(oldTag, controller.text);
-            _refresh();
-            if (context.mounted) Navigator.pop(ctx);
-          }
-        },
-      ),
-    );
-  }
-
-  // --- Add Tag (Bottom Sheet Style) ---
-  void _showAddTagSheet() {
-    final controller = TextEditingController();
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          // Allow shrink wrap, max 90%
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.9,
-          ),
-          decoration: const BoxDecoration(
-            color: CupertinoColors.systemBackground,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Material(
-            type: MaterialType.transparency,
-            child: Column(
-              mainAxisSize: MainAxisSize.min, // Shrink vertically
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        child: const Text("Cancel"),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Text(
-                        "New Tag",
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                        ),
-                      ),
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        child: const Text(
-                          "Create",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: () async {
-                          if (controller.text.isNotEmpty) {
-                            await widget.storage.addGlobalTag(controller.text);
-                            _refresh();
-                            if (context.mounted) Navigator.pop(ctx);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 1, color: Colors.grey.shade200),
-                // Body
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: CupertinoTextField(
-                    controller: controller,
-                    placeholder: "Tag Name",
-                    padding: const EdgeInsets.all(12),
-                    autofocus: true,
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.systemGrey6,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    onSubmitted: (_) async {
-                      if (controller.text.isNotEmpty) {
-                        await widget.storage.addGlobalTag(controller.text);
-                        _refresh();
-                        if (context.mounted) Navigator.pop(ctx);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- Helper Widget for Input Bottom Sheets ---
-  Widget _buildInputBottomSheet({
-    required String title,
-    required String actionLabel,
-    required TextEditingController controller,
-    required String placeholder,
-    required VoidCallback onSave,
-  }) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: CupertinoColors.systemBackground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Material(
-        type: MaterialType.transparency,
+      builder: (ctx) => _buildBottomSheet(
+        context: context,
+        title: "Manage Tag",
+        hideSave: true, // No save button, just a list of actions
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: const Text("Cancel"),
-                    onPressed: () => Navigator.pop(context),
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Center(
+                child: Text(
+                  "#$tag",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 17,
-                    ),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: onSave,
-                    child: Text(
-                      actionLabel,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(height: 1, color: Colors.grey.shade200),
-
-            // Body
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    CupertinoTextField(
-                      controller: controller,
-                      placeholder: placeholder,
-                      padding: const EdgeInsets.all(12),
-                      autofocus: true,
-                      decoration: BoxDecoration(
-                        color: CupertinoColors.systemGrey6,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      onSubmitted: (_) => onSave(),
-                    ),
-                  ],
                 ),
               ),
+            ),
+            _buildOptionTile(
+              icon: CupertinoIcons.pencil,
+              label: "Rename Tag",
+              color: Colors.black,
+              onTap: () {
+                Navigator.pop(ctx);
+                _showRenameSheet(tag);
+              },
+            ),
+            const Divider(height: 1),
+            _buildOptionTile(
+              icon: CupertinoIcons.folder_badge_plus,
+              label: "Move to Category",
+              color: Colors.black,
+              onTap: () {
+                Navigator.pop(ctx);
+                showMoveTagDialog(context, widget.storage, tag, _refresh);
+              },
+            ),
+            const Divider(height: 1),
+            _buildOptionTile(
+              icon: CupertinoIcons.trash,
+              label: "Delete Tag",
+              color: CupertinoColors.destructiveRed,
+              onTap: () {
+                Navigator.pop(ctx);
+                _showDeleteConfirm(tag);
+              },
             ),
           ],
         ),
@@ -308,7 +88,212 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
     );
   }
 
-  // --- Delete Confirmation (Keep generic alert for dangerous actions) ---
+  Widget _buildOptionTile({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 16),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            Icon(
+              CupertinoIcons.right_chevron,
+              color: Colors.grey.shade400,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- 2. Rename Tag (Matches 'New Category' style) ---
+  void _showRenameSheet(String oldTag) {
+    final controller = TextEditingController(text: oldTag);
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => _buildBottomSheet(
+        context: context,
+        title: "Rename Tag",
+        onSave: () async {
+          if (controller.text.isNotEmpty && controller.text != oldTag) {
+            await widget.storage.renameGlobalTag(oldTag, controller.text);
+            _refresh();
+            if (context.mounted) Navigator.pop(ctx);
+          }
+        },
+        child: Column(
+          children: [
+            CupertinoTextField(
+              controller: controller,
+              placeholder: "New Name",
+              padding: const EdgeInsets.all(12),
+              autofocus: true,
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemGrey6,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onSubmitted: (_) async {
+                if (controller.text.isNotEmpty && controller.text != oldTag) {
+                  await widget.storage.renameGlobalTag(oldTag, controller.text);
+                  _refresh();
+                  if (context.mounted) Navigator.pop(ctx);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- 3. Add Tag (Matches 'New Category' style) ---
+  void _showAddTagSheet() {
+    final controller = TextEditingController();
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => _buildBottomSheet(
+        context: context,
+        title: "New Tag",
+        onSave: () async {
+          if (controller.text.isNotEmpty) {
+            await widget.storage.addGlobalTag(controller.text);
+            _refresh();
+            if (context.mounted) Navigator.pop(ctx);
+          }
+        },
+        child: Column(
+          children: [
+            CupertinoTextField(
+              controller: controller,
+              placeholder: "Tag Name",
+              padding: const EdgeInsets.all(12),
+              autofocus: true,
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemGrey6,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              onSubmitted: (_) async {
+                if (controller.text.isNotEmpty) {
+                  await widget.storage.addGlobalTag(controller.text);
+                  _refresh();
+                  if (context.mounted) Navigator.pop(ctx);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Helper: Shared Bottom Sheet Builder (Matches dialogs.dart) ---
+  Widget _buildBottomSheet({
+    required BuildContext context,
+    required String title,
+    Widget? child,
+    VoidCallback? onSave,
+    bool hideSave = false,
+  }) {
+    return Padding(
+      // Handle keyboard
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        // Dynamic height, max 90%
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        decoration: const BoxDecoration(
+          color: CupertinoColors.systemBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // Shrink to fit content
+            children: [
+              // Drag Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      child: const Text("Cancel"),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
+                    if (!hideSave)
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: onSave,
+                        child: const Text(
+                          "Save",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 50),
+                  ],
+                ),
+              ),
+              Container(height: 1, color: Colors.grey.shade200),
+              // Scrollable Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      if (child != null) child,
+                      const SizedBox(height: 24), // Extra bottom padding
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showDeleteConfirm(String tag) {
     showCupertinoDialog(
       context: context,
