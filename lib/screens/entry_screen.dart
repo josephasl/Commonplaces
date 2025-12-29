@@ -29,6 +29,8 @@ class _EntryScreenState extends State<EntryScreen> {
   @override
   Widget build(BuildContext context) {
     final visibleKeys = widget.folder.visibleAttributes;
+    final customAttrs = widget.storage.getCustomAttributes(); // Fetch customs
+    final registry = getAttributeRegistry(customAttrs); // Merge
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -107,9 +109,9 @@ class _EntryScreenState extends State<EntryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ...visibleKeys.map((key) {
-                  final definition = attributeRegistry[key];
+                  final definition = registry[key]; // Use the merged registry
                   if (definition == null) return const SizedBox.shrink();
-
+                  // ...
                   final value = widget.entry.getAttribute(key);
 
                   // --- CHANGED LOGIC HERE ---

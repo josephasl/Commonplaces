@@ -7,10 +7,12 @@ class EntryCard extends StatelessWidget {
   final AppEntry entry;
   final List<String>? visibleAttributes;
   final Color Function(String)? tagColorResolver;
+  final Map<String, AttributeDefinition> registry;
 
   const EntryCard({
     super.key,
     required this.entry,
+    required this.registry,
     this.visibleAttributes,
     this.tagColorResolver,
   });
@@ -36,7 +38,7 @@ class EntryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: keysToShow.map((key) {
-          final definition = attributeRegistry[key];
+          final definition = registry[key];
           if (definition == null) return const SizedBox.shrink();
 
           final value = entry.getAttribute(key);
@@ -103,7 +105,7 @@ class EntryCard extends StatelessWidget {
       );
     }
 
-    // ... [Rest of switch case logic same as before] ...
+    // Default Renderers
     switch (def.type) {
       case AttributeValueType.date:
         if (value == null) return const SizedBox.shrink();
@@ -118,7 +120,7 @@ class EntryCard extends StatelessWidget {
         return Row(
           children: [
             Icon(
-              def.key == 'dateCreated' || def.key == 'dateEdited'
+              def.key.contains('Created') || def.key.contains('Edited')
                   ? Icons.access_time
                   : Icons.calendar_today,
               size: 12,
@@ -195,12 +197,57 @@ class FolderCard extends StatelessWidget {
     this.tagColorResolver,
   });
 
+  // --- Helper to mix tag colors ---
+  Color _getMixedColor() {
+    // 1. If an override color exists (like for "Untagged" folder), use it.
+    if (color != null) return color!;
+
+    // 2. If no tags or no resolver, return default blue
+    if (folder.displayTags.isEmpty || tagColorResolver == null) {
+      return CupertinoColors.activeBlue;
+    }
+
+    // 3. Collect all colors
+    List<Color> colors = [];
+    for (var tag in folder.displayTags) {
+      colors.add(tagColorResolver!(tag));
+    }
+
+    if (colors.isEmpty) return CupertinoColors.activeBlue;
+
+    // 4. Mix RGB values
+    int r = 0, g = 0, b = 0;
+    for (var c in colors) {
+      r += c.red;
+      g += c.green;
+      b += c.blue;
+    }
+
+    // Return average color
+    return Color.fromARGB(
+      255,
+      (r / colors.length).round(),
+      (g / colors.length).round(),
+      (b / colors.length).round(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Calculate the mixed color
+    final baseColor = _getMixedColor();
+
+    // Determine background (pastel) and foreground (strong)
+    // If the base color is explicitly provided (like the Grey for Untagged), respect it.
+    final bool isOverride = color != null;
+
+    final bg = isOverride ? color! : baseColor.withOpacity(0.15);
+    final fg = isOverride ? Colors.grey.shade600 : baseColor;
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: color ?? const Color(0xFFF0F4FF),
+        color: bg,
         borderRadius: BorderRadius.circular(16),
       ),
       padding: const EdgeInsets.all(16),
@@ -210,17 +257,11 @@ class FolderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(
-                CupertinoIcons.folder_solid,
-                size: 32,
-                color: color != null
-                    ? Colors.grey.shade600
-                    : CupertinoColors.activeBlue,
-              ),
+              Icon(CupertinoIcons.folder_solid, size: 32, color: fg),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withOpacity(0.6),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -228,7 +269,7 @@ class FolderCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade700,
+                    color: fg.withOpacity(0.8),
                   ),
                 ),
               ),
@@ -248,15 +289,10 @@ class FolderCard extends StatelessWidget {
               spacing: 4,
               runSpacing: 4,
               children: folder.displayTags.take(3).map((t) {
-                Color bg = Colors.white;
-                Color txt = Colors.grey.shade700;
-
+                // Individual chips inside the folder card keep their own specific color
+                Color chipColor = Colors.grey;
                 if (tagColorResolver != null) {
-                  final catColor = tagColorResolver!(t);
-                  if (catColor != CupertinoColors.systemGrey) {
-                    bg = catColor.withOpacity(0.15);
-                    txt = catColor.withOpacity(1.0);
-                  }
+                  chipColor = tagColorResolver!(t);
                 }
 
                 return Container(
@@ -265,17 +301,18 @@ class FolderCard extends StatelessWidget {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: bg,
+                    color: chipColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(4),
-                    border: bg == Colors.white
-                        ? Border.all(color: Colors.black.withOpacity(0.05))
-                        : null,
+                    border: Border.all(
+                      color: chipColor.withOpacity(0.3),
+                      width: 0.5,
+                    ),
                   ),
                   child: Text(
                     "#$t",
                     style: TextStyle(
                       fontSize: 10,
-                      color: txt,
+                      color: chipColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -283,7 +320,6 @@ class FolderCard extends StatelessWidget {
               }).toList(),
             )
           else
-            // FIXED: Use SizedBox instead of Text(" ")
             const SizedBox(height: 18),
         ],
       ),

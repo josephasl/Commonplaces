@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'models.dart';
 import 'package:flutter/cupertino.dart';
+import 'attributes.dart';
 
 class StorageService {
   final Uuid _uuid = const Uuid();
@@ -17,6 +18,7 @@ class StorageService {
   static const String _expandedEntryAttributesKey = 'expanded_entry_attributes';
 
   static const String _defaultCategoryId = 'default_grey_cat';
+  static const String _customAttributesKey = 'custom_attributes';
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -282,41 +284,88 @@ class StorageService {
     }
   }
 
+  // In lib/storage_service.dart
+
   Future<void> removeGlobalTag(String tag) async {
+    // 1. Remove from Global List
     final currentTags = getGlobalTags();
     currentTags.remove(tag);
     await _settingsBox.put(_globalTagsKey, currentTags);
+
+    // 2. Remove from Category Mapping
     final mapping = getTagMapping();
     mapping.remove(tag);
     await _settingsBox.put(_tagMappingKey, mapping);
-  }
 
-  Future<void> renameGlobalTag(String oldTag, String newTag) async {
-    if (oldTag == newTag) return;
+    // 3. Remove from Folders (FIXED: This was missing)
     final allFolders = getAllFolders();
     for (var f in allFolders) {
-      if (f.displayTags.contains(oldTag)) {
-        f.displayTags[f.displayTags.indexOf(oldTag)] = newTag;
+      final List<String> tags = List.from(f.displayTags);
+      if (tags.contains(tag)) {
+        tags.remove(tag);
+        f.setAttribute('displayTags', tags);
         await saveFolder(f);
       }
     }
+
+    // 4. Remove from Entries (FIXED: This was missing)
     final allEntries = getAllEntries();
     for (var e in allEntries) {
       final rawVal = e.getAttribute('tag');
       List<String> tags = (rawVal is String)
           ? [rawVal]
           : (rawVal is List ? List<String>.from(rawVal) : []);
+
+      if (tags.contains(tag)) {
+        tags.remove(tag);
+        e.setAttribute('tag', tags); // Save empty list or reduced list
+        await saveEntry(e);
+      }
+    }
+  }
+
+  Future<void> renameGlobalTag(String oldTag, String newTag) async {
+    if (oldTag == newTag) return;
+
+    // 1. Update Folders (FIXED)
+    final allFolders = getAllFolders();
+    for (var f in allFolders) {
+      // Get a mutable copy of the tags
+      final List<String> tags = List.from(f.displayTags);
+
       if (tags.contains(oldTag)) {
-        tags[tags.indexOf(oldTag)] = newTag;
+        final index = tags.indexOf(oldTag);
+        tags[index] = newTag; // Update the list
+
+        // CRITICAL: Write the updated list back to the folder attributes
+        f.setAttribute('displayTags', tags);
+        await saveFolder(f);
+      }
+    }
+
+    // 2. Update Entries
+    final allEntries = getAllEntries();
+    for (var e in allEntries) {
+      final rawVal = e.getAttribute('tag');
+      List<String> tags = (rawVal is String)
+          ? [rawVal]
+          : (rawVal is List ? List<String>.from(rawVal) : []);
+
+      if (tags.contains(oldTag)) {
+        final index = tags.indexOf(oldTag);
+        tags[index] = newTag;
         e.setAttribute('tag', tags);
         await saveEntry(e);
       }
     }
+
+    // 3. Update Global List & Mappings
     final currentTags = getGlobalTags();
     if (currentTags.contains(oldTag)) {
-      currentTags.remove(oldTag);
-      currentTags.add(newTag);
+      final index = currentTags.indexOf(oldTag);
+      currentTags[index] = newTag; // Update in place to preserve order
       await _settingsBox.put(_globalTagsKey, currentTags);
+
       final mapping = getTagMapping();
       if (mapping.containsKey(oldTag)) {
         final catId = mapping[oldTag]!;
@@ -348,5 +397,43 @@ class StorageService {
 
   Future<void> saveExpandedAttributes(List<String> keys) async {
     await _settingsBox.put(_expandedEntryAttributesKey, keys);
+  }
+
+  List<AttributeDefinition> getCustomAttributes() {
+    final raw = _settingsBox.get(_customAttributesKey, defaultValue: []);
+    if (raw is List) {
+      return raw
+          .map((e) {
+            try {
+              return AttributeDefinition.fromJson(Map<String, dynamic>.from(e));
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<AttributeDefinition>()
+          .toList();
+    }
+    return [];
+  }
+
+  Future<void> addCustomAttribute(AttributeDefinition attr) async {
+    final list = getCustomAttributes();
+    // Prevent duplicates
+    if (list.any((e) => e.key == attr.key)) return;
+
+    list.add(attr);
+    await _settingsBox.put(
+      _customAttributesKey,
+      list.map((e) => e.toJson()).toList(),
+    );
+  }
+
+  Future<void> deleteCustomAttribute(String key) async {
+    final list = getCustomAttributes();
+    list.removeWhere((e) => e.key == key);
+    await _settingsBox.put(
+      _customAttributesKey,
+      list.map((e) => e.toJson()).toList(),
+    );
   }
 }

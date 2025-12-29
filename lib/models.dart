@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:uuid/uuid.dart';
+import 'package:flutter/material.dart';
 
 // --- SHARED SORT OPTION ---
+// This was missing and is needed by HomeScreen
 enum SortOption {
   nameAsc,
   nameDesc,
@@ -13,7 +13,7 @@ enum SortOption {
   countLowToHigh,
 }
 
-// --- CONSTANTS ---
+// --- APP CONSTANTS ---
 class AppConstants {
   static const List<Color> categoryColors = [
     CupertinoColors.systemGrey, // 0
@@ -50,19 +50,21 @@ class AppConstants {
   ];
 }
 
+// --- MODELS ---
+
 class TagCategory {
   final String id;
   final String name;
   final int colorIndex;
   final int iconIndex;
-  final int sortOrder; // NEW FIELD
+  final int sortOrder;
 
   TagCategory({
     required this.id,
     required this.name,
     required this.colorIndex,
     required this.iconIndex,
-    this.sortOrder = 0, // Default
+    this.sortOrder = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -84,14 +86,16 @@ class TagCategory {
   }
 }
 
-// ... [AppEntry and AppFolder classes remain unchanged] ...
 class AppEntry {
   final String id;
   final Map<String, dynamic> attributes;
   AppEntry({required this.id, required this.attributes});
+
   dynamic getAttribute<T>(String key) => attributes[key];
   void setAttribute(String key, dynamic value) => attributes[key] = value;
+
   Map<String, dynamic> toJson() => {'id': id, 'attributes': attributes};
+
   factory AppEntry.fromJson(Map<String, dynamic> json) => AppEntry(
     id: json['id'],
     attributes: Map<String, dynamic>.from(json['attributes'] ?? {}),
@@ -102,6 +106,7 @@ class AppFolder {
   final String id;
   final Map<String, dynamic> attributes;
   AppFolder({required this.id, required this.attributes});
+
   List<String> get displayTags {
     final raw = attributes['displayTags'];
     if (raw is List) return raw.map((e) => e.toString()).toList();
@@ -116,9 +121,12 @@ class AppFolder {
 
   void setVisibleAttributes(List<String> attrs) =>
       attributes['visibleAttributes'] = attrs;
+
   dynamic getAttribute<T>(String key) => attributes[key];
   void setAttribute(String key, dynamic value) => attributes[key] = value;
+
   Map<String, dynamic> toJson() => {'id': id, 'attributes': attributes};
+
   factory AppFolder.fromJson(Map<String, dynamic> json) => AppFolder(
     id: json['id'],
     attributes: Map<String, dynamic>.from(json['attributes'] ?? {}),

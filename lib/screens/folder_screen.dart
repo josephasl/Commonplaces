@@ -5,6 +5,7 @@ import '../models.dart';
 import '../storage_service.dart';
 import '../cards.dart';
 import '../dialogs.dart';
+import '../attributes.dart';
 
 enum EntrySortOption {
   dateCreatedNewest,
@@ -21,14 +22,13 @@ class FolderScreen extends StatefulWidget {
   final AppFolder folder;
   final StorageService storage;
   final VoidCallback? onBack;
-  // NEW CALLBACK
   final Function(AppEntry) onEntryTap;
 
   const FolderScreen({
     super.key,
     required this.folder,
     required this.storage,
-    required this.onEntryTap, // REQUIRE THIS
+    required this.onEntryTap,
     this.onBack,
   });
 
@@ -37,7 +37,6 @@ class FolderScreen extends StatefulWidget {
 }
 
 class _FolderScreenState extends State<FolderScreen> {
-  // Initialize with empty defaults to prevent any LateInitializationError
   List<AppEntry> _allFolderEntries = [];
   Set<String> _activeTags = {};
 
@@ -48,11 +47,9 @@ class _FolderScreenState extends State<FolderScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize _activeTags based on the folder immediately
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
     }
-    // Load the actual data
     _refresh();
   }
 
@@ -63,9 +60,6 @@ class _FolderScreenState extends State<FolderScreen> {
   }
 
   void _refresh() {
-    // If widget is not mounted, we can still set state if it's the first frame,
-    // but usually better to check.
-
     final List<AppEntry> entries;
     if (widget.folder.id == 'untagged_special_id') {
       entries = widget.storage.getUntaggedEntries();
@@ -76,22 +70,13 @@ class _FolderScreenState extends State<FolderScreen> {
     if (mounted) {
       setState(() {
         _allFolderEntries = entries;
-        // Re-sync tags if the folder definition changed externally
         if (widget.folder.id != 'untagged_special_id') {
-          // We union to keep user selection if they unselected some,
-          // but for simplicity, let's reset to folder defaults on refresh
-          // so new tags appear.
           _activeTags = Set.from(widget.folder.displayTags);
         }
       });
     } else {
-      // Initialize for first build
       _allFolderEntries = entries;
     }
-  }
-
-  void _openFolderSettings() {
-    showFolderSettingsDialog(context, widget.folder, widget.storage, _refresh);
   }
 
   void _showSortSheet() {
@@ -202,6 +187,8 @@ class _FolderScreenState extends State<FolderScreen> {
   Widget build(BuildContext context) {
     // 1. FILTER
     List<AppEntry> processedEntries = [];
+    final customAttrs = widget.storage.getCustomAttributes();
+    final registry = getAttributeRegistry(customAttrs);
 
     if (widget.folder.id == 'untagged_special_id') {
       processedEntries = List.from(_allFolderEntries);
@@ -323,7 +310,7 @@ class _FolderScreenState extends State<FolderScreen> {
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
         actions: [
-          // --- ADDED EDIT BUTTON ---
+          // --- UPDATED ACTIONS: Only one button now ---
           if (widget.folder.id != 'untagged_special_id')
             IconButton(
               icon: const Icon(
@@ -338,10 +325,6 @@ class _FolderScreenState extends State<FolderScreen> {
                 _refresh,
               ),
             ),
-          IconButton(
-            icon: const Icon(CupertinoIcons.gear, color: Colors.black),
-            onPressed: _openFolderSettings,
-          ),
         ],
       ),
       body: Stack(
@@ -433,6 +416,7 @@ class _FolderScreenState extends State<FolderScreen> {
                                 entry: entry,
                                 visibleAttributes: visibleAttrs,
                                 tagColorResolver: widget.storage.getTagColor,
+                                registry: registry,
                               ),
                             );
                           },

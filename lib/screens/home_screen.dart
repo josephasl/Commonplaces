@@ -9,6 +9,7 @@ import 'folder_screen.dart';
 import '../shakeable.dart';
 import 'edit_tags_screen.dart';
 import 'entry_screen.dart'; // IMPORT NEW SCREEN
+import 'manage_library_screen.dart'; // Import the new file
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -223,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      EditTagsScreen(storage: _storage, onUpdate: _refreshData),
+      ManageLibraryScreen(storage: _storage, onUpdate: _refreshData),
       _buildHomeBody(),
     ];
 
