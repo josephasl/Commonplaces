@@ -8,8 +8,8 @@ import '../cards.dart';
 import 'folder_screen.dart';
 import '../shakeable.dart';
 import 'edit_tags_screen.dart';
-import 'entry_screen.dart'; // IMPORT NEW SCREEN
-import 'manage_library_screen.dart'; // Import the new file
+import 'entry_screen.dart';
+import 'manage_library_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,10 +19,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // ... [Storage, Controllers, Search State remain same] ...
   final StorageService _storage = StorageService();
   late PageController _pageController;
   final TextEditingController _searchController = TextEditingController();
+
+  final ScrollController _homeScrollController = ScrollController();
+
+  // GlobalKeys
+  final GlobalKey<ManageLibraryScreenState> _manageLibKey = GlobalKey();
+  final GlobalKey<FolderScreenState> _folderScreenKey = GlobalKey();
+  final GlobalKey<NavigatorState> _folderNavigatorKey = GlobalKey();
+
+  // --- PHYSICS CONTROL ---
+  // Default to Bouncing (Swipe enabled)
+  ScrollPhysics _pagePhysics = const BouncingScrollPhysics();
+
   String _searchQuery = '';
   SortOption _folderSort = SortOption.updatedNewest;
   String _selectedFilterCategoryId = 'ALL';
@@ -31,9 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 1;
   Map<String, int> _folderCounts = {};
 
-  // NAVIGATION STATE
   AppFolder? _lastOpenedFolder;
-  AppEntry? _lastOpenedEntry; // NEW: Track open entry
 
   @override
   void initState() {
@@ -46,13 +55,32 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _pageController.dispose();
     _searchController.dispose();
+    _homeScrollController.dispose();
     super.dispose();
+  }
+
+  // --- NEW: Helper to lock/unlock PageView ---
+  void _setPageSwipeEnabled(bool enabled) {
+    final newPhysics = enabled
+        ? const BouncingScrollPhysics()
+        : const NeverScrollableScrollPhysics();
+
+    if (_pagePhysics.runtimeType != newPhysics.runtimeType) {
+      // Use addPostFrameCallback to avoid "setState during build" errors
+      // if called from NavigatorObserver immediately
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _pagePhysics = newPhysics;
+          });
+        }
+      });
+    }
   }
 
   void _refreshData() {
     setState(() {
       _folders = _storage.getAllFolders();
-
       _folderCounts.clear();
       final allEntries = _storage.getAllEntries();
       final untaggedEntries = _storage.getUntaggedEntries();
@@ -76,7 +104,6 @@ class _HomeScreenState extends State<HomeScreen> {
         _folderCounts[folder.id] = count;
       }
 
-      // If the currently open folder was deleted, close it
       if (_lastOpenedFolder != null) {
         final exists =
             _folders.any((f) => f.id == _lastOpenedFolder!.id) ||
@@ -160,25 +187,65 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
       _isEditing = false;
+      // Safety: If leaving the folder tab, re-enable scrolling
+      // (Unless we return to it later and it still has a stack,
+      //  but usually PageView resets gestures on switch)
+      if (index != 2) {
+        _pagePhysics = const BouncingScrollPhysics();
+      } else {
+        // If entering Folder tab, check if it has a stack and lock if needed
+        if (_folderNavigatorKey.currentState?.canPop() ?? false) {
+          _pagePhysics = const NeverScrollableScrollPhysics();
+        } else {
+          _pagePhysics = const BouncingScrollPhysics();
+        }
+      }
     });
   }
 
   void _onBottomNavTapped(int index) {
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-
-    // NAVIGATION FIX: If leaving the folder view, clear the folder state
-    // after the animation finishes. This forces a fresh reload next time.
+    if (_selectedIndex == index) {
+      if (index == 0) {
+        _manageLibKey.currentState?.handleNavTap();
+      } else if (index == 1) {
+        if (_homeScrollController.hasClients &&
+            _homeScrollController.offset > 0) {
+          _homeScrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        } else {
+          if (_selectedFilterCategoryId != 'ALL') {
+            setState(() {
+              _selectedFilterCategoryId = 'ALL';
+            });
+          }
+        }
+      } else if (index == 2) {
+        // --- TAB 3 LOGIC ---
+        // A. If nested entries are open, Pop back to Folder List
+        if (_folderNavigatorKey.currentState?.canPop() ?? false) {
+          _folderNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+          // Manually ensure physics are reset because popUntil might happen fast
+          _setPageSwipeEnabled(true);
+        } else {
+          // B. If already at Folder List, scroll to top/reset tags
+          _folderScreenKey.currentState?.handleNavTap();
+        }
+      }
+    } else {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
-  // OPEN FOLDER
   void _openFolder(AppFolder folder) {
     setState(() {
       _lastOpenedFolder = folder;
-      _lastOpenedEntry = null; // Clear any old entry when opening a folder
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pageController.hasClients) {
           _pageController.animateToPage(
@@ -191,52 +258,31 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // NEW: OPEN ENTRY
-  void _openEntry(AppEntry entry) {
-    setState(() {
-      _lastOpenedEntry = entry;
-      // We don't need to animate page because we are likely already on Page 2
-    });
-  }
-
-  // NEW: CLOSE ENTRY (Back button logic)
-  void _closeEntry() {
-    setState(() {
-      _lastOpenedEntry = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
-      ManageLibraryScreen(storage: _storage, onUpdate: _refreshData),
+      ManageLibraryScreen(
+        key: _manageLibKey,
+        storage: _storage,
+        onUpdate: _refreshData,
+      ),
       _buildHomeBody(),
     ];
 
-    // LOGIC FOR 3RD TAB
     if (_lastOpenedFolder != null) {
-      if (_lastOpenedEntry != null) {
-        // Show Entry Screen
-        pages.add(
-          EntryScreen(
-            entry: _lastOpenedEntry!,
-            folder: _lastOpenedFolder!,
-            storage: _storage,
-            onBack: _closeEntry, // Go back to FolderScreen
-          ),
-        );
-      } else {
-        // Show Folder Screen
-        pages.add(
-          FolderScreen(
-            key: ValueKey(_lastOpenedFolder!.id),
-            folder: _lastOpenedFolder!,
-            storage: _storage,
-            onBack: () => _onBottomNavTapped(1), // Go back to Home
-            onEntryTap: _openEntry, // Pass navigation callback
-          ),
-        );
-      }
+      pages.add(
+        FolderTab(
+          key: ValueKey(_lastOpenedFolder!.id),
+          folder: _lastOpenedFolder!,
+          storage: _storage,
+          navigatorKey: _folderNavigatorKey,
+          folderScreenKey: _folderScreenKey,
+          onBack: () => _onBottomNavTapped(1),
+          onDataChanged: _refreshData,
+          // Callback to parent: true = enable swipe, false = disable swipe
+          onStackChanged: (isAtRoot) => _setPageSwipeEnabled(isAtRoot),
+        ),
+      );
     }
 
     final List<BottomNavigationBarItem> navItems = [
@@ -266,13 +312,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.white,
       body: PageView(
         controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _selectedIndex = index;
-            _isEditing = false;
-          });
-        },
-        physics: const BouncingScrollPhysics(),
+        onPageChanged: _onPageChanged,
+        physics: _pagePhysics, // Dynamic Physics attached here
         children: pages,
       ),
       bottomNavigationBar: Container(
@@ -306,12 +347,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHomeBody() {
     List<AppFolder> displayFolders = List.from(_folders);
 
-    // 1. FILTER BY CATEGORY
     if (_selectedFilterCategoryId != 'ALL') {
       final mapping = _storage.getTagMapping();
       displayFolders = displayFolders.where((f) {
         if (f.displayTags.isEmpty) return false;
-
         return f.displayTags.any((t) {
           final catId = mapping[t] ?? 'default_grey_cat';
           return catId == _selectedFilterCategoryId;
@@ -319,7 +358,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList();
     }
 
-    // 2. SEARCH
     if (_searchQuery.isNotEmpty) {
       displayFolders = displayFolders.where((f) {
         final title = f.getAttribute<String>('title') ?? '';
@@ -327,7 +365,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList();
     }
 
-    // 3. SORT
     displayFolders.sort((a, b) {
       switch (_folderSort) {
         case SortOption.nameAsc:
@@ -369,12 +406,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // 4. UNTAGGED FOLDER
     AppFolder? untaggedFolder;
     bool showUntagged =
         _searchQuery.isEmpty || "untagged".contains(_searchQuery.toLowerCase());
-
-    // Hide untagged if filtering by a specific category (except All)
     if (_selectedFilterCategoryId != 'ALL') {
       showUntagged = false;
     }
@@ -475,6 +509,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
                     child: MasonryGridView.count(
+                      controller: _homeScrollController,
+                      key: const PageStorageKey('home_grid'),
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
@@ -658,7 +694,7 @@ class _HomeScreenState extends State<HomeScreen> {
           folder: folder,
           color: const Color(0xFFF2F2F7),
           entryCount: count,
-          tagColorResolver: _storage.getTagColor, // Pass color resolver
+          tagColorResolver: _storage.getTagColor,
         ),
       );
     }
@@ -679,7 +715,7 @@ class _HomeScreenState extends State<HomeScreen> {
             FolderCard(
               folder: folder,
               entryCount: count,
-              tagColorResolver: _storage.getTagColor, // Pass color resolver
+              tagColorResolver: _storage.getTagColor,
             ),
             if (_isEditing)
               Positioned(
@@ -712,5 +748,112 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+}
+
+// --- UPDATED FOLDER TAB with Observer Logic ---
+class FolderTab extends StatefulWidget {
+  final AppFolder folder;
+  final StorageService storage;
+  final GlobalKey<NavigatorState> navigatorKey;
+  final GlobalKey<FolderScreenState> folderScreenKey;
+  final VoidCallback onBack;
+  final VoidCallback onDataChanged;
+  final Function(bool isAtRoot) onStackChanged;
+
+  const FolderTab({
+    super.key,
+    required this.folder,
+    required this.storage,
+    required this.navigatorKey,
+    required this.folderScreenKey,
+    required this.onBack,
+    required this.onDataChanged,
+    required this.onStackChanged,
+  });
+
+  @override
+  State<FolderTab> createState() => _FolderTabState();
+}
+
+class _FolderTabState extends State<FolderTab>
+    with AutomaticKeepAliveClientMixin {
+  late _FolderNavObserver _observer;
+
+  @override
+  void initState() {
+    super.initState();
+    _observer = _FolderNavObserver(
+      onStackChanged: (isAtRoot) {
+        widget.onStackChanged(isAtRoot);
+      },
+    );
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Navigator(
+      key: widget.navigatorKey,
+      observers: [_observer], // Cache observer so it doesn't detach/reattach
+      onGenerateRoute: (settings) {
+        return CupertinoPageRoute(
+          builder: (context) => FolderScreen(
+            key: widget.folderScreenKey,
+            folder: widget.folder,
+            storage: widget.storage,
+            onBack: widget.onBack,
+            onEntryTap: (entry) {
+              Navigator.of(context)
+                  .push(
+                    CupertinoPageRoute(
+                      builder: (context) => EntryScreen(
+                        entry: entry,
+                        folder: widget.folder,
+                        storage: widget.storage,
+                      ),
+                    ),
+                  )
+                  .then((_) {
+                    widget.onDataChanged();
+                    widget.folderScreenKey.currentState?.refresh();
+                  });
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+// --- HELPER CLASS ---
+class _FolderNavObserver extends NavigatorObserver {
+  final Function(bool isAtRoot) onStackChanged;
+
+  _FolderNavObserver({required this.onStackChanged});
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    // When pushing (Entry Screen), we are leaving root.
+    // DISABLE PageView swipe immediately.
+    onStackChanged(false);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    // When popping (Swipe back or back button), check if we returned to root.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (navigator != null) {
+        // If canPop is true, we are still deep in the stack.
+        // If canPop is false, we are at the Folder List (root).
+        final isAtRoot = !navigator!.canPop();
+        onStackChanged(isAtRoot);
+      }
+    });
   }
 }

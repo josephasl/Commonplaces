@@ -20,6 +20,8 @@ class StorageService {
   static const String _defaultCategoryId = 'default_grey_cat';
   static const String _customAttributesKey = 'custom_attributes';
 
+  static const String _manageLibraryTabIndexKey = 'manage_library_tab_index';
+
   Future<void> init() async {
     await Hive.initFlutter();
     await Hive.openBox(_entriesBoxName);
@@ -182,6 +184,18 @@ class StorageService {
     int idx = cat.colorIndex;
     if (idx < 0 || idx >= AppConstants.categoryColors.length) idx = 0;
     return AppConstants.categoryColors[idx];
+  }
+
+  // --- NEW METHODS FOR TAB PERSISTENCE ---
+  int getManageLibraryTabIndex() {
+    final val = _settingsBox.get(_manageLibraryTabIndexKey, defaultValue: 0);
+    // Safety check to ensure index is valid (we only have 2 tabs: 0 and 1)
+    if (val is int && val >= 0 && val <= 1) return val;
+    return 0;
+  }
+
+  Future<void> saveManageLibraryTabIndex(int index) async {
+    await _settingsBox.put(_manageLibraryTabIndexKey, index);
   }
 
   // ... [Standard Operations: Box getters, getAllEntries, etc. Copy from previous stable file if needed] ...

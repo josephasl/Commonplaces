@@ -11,17 +11,31 @@ class EditTagsScreen extends StatefulWidget {
   const EditTagsScreen({super.key, required this.storage, this.onUpdate});
 
   @override
-  State<EditTagsScreen> createState() => _EditTagsScreenState();
+  State<EditTagsScreen> createState() => EditTagsScreenState();
 }
 
-class _EditTagsScreenState extends State<EditTagsScreen> {
+// Public State class so we can access scrollToTop via GlobalKey
+class EditTagsScreenState extends State<EditTagsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController(); // NEW
   String _searchQuery = '';
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose(); // NEW
     super.dispose();
+  }
+
+  // --- NEW: Public method called by parent ---
+  void scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _refresh() {
@@ -63,8 +77,11 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
     return Stack(
       children: [
         ReorderableListView.builder(
+          scrollController: _scrollController, // NEW: Attach controller
+          key: const PageStorageKey('edit_tags_list'),
           padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
           itemCount: categories.length,
+          // ... [rest of ReorderableListView remains the same] ...
           onReorder: (oldIndex, newIndex) async {
             setState(() {
               if (oldIndex < newIndex) newIndex -= 1;
@@ -143,13 +160,11 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
                               cat,
                               _refresh,
                             ),
-                            // Ellipsis icon inside a circle for better touch target
                             child: Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors
-                                    .transparent, // or a light grey if you want bg
+                                color: Colors.transparent,
                               ),
                               child: const Icon(
                                 CupertinoIcons.ellipsis,
@@ -197,7 +212,7 @@ class _EditTagsScreenState extends State<EditTagsScreen> {
           },
         ),
 
-        // Floating Search + Add Tag
+        // ... [Floating Search + Add Tag code remains exactly the same] ...
         Positioned(
           bottom: 20,
           left: 16,

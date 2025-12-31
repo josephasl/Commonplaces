@@ -5,7 +5,6 @@ import '../attributes.dart';
 import '../models.dart';
 import '../dialogs.dart';
 import 'edit_tags_screen.dart';
-import '../dialogs.dart'; // Ensure this is imported
 
 class ManageLibraryScreen extends StatefulWidget {
   final StorageService storage;
@@ -14,24 +13,58 @@ class ManageLibraryScreen extends StatefulWidget {
   const ManageLibraryScreen({super.key, required this.storage, this.onUpdate});
 
   @override
-  State<ManageLibraryScreen> createState() => _ManageLibraryScreenState();
+  State<ManageLibraryScreen> createState() => ManageLibraryScreenState();
 }
 
-class _ManageLibraryScreenState extends State<ManageLibraryScreen>
+// Public state class for GlobalKey access
+class ManageLibraryScreenState extends State<ManageLibraryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+
+  // 1. Keys and Controllers
+  final GlobalKey<EditTagsScreenState> _editTagsKey = GlobalKey();
+  final ScrollController _attributesScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    final initialIndex = widget.storage.getManageLibraryTabIndex();
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: initialIndex,
+    );
 
-    // Listen to tab changes to update the AppBar actions (show/hide button)
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
+        widget.storage.saveManageLibraryTabIndex(_tabController.index);
         setState(() {});
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _attributesScrollController.dispose(); // Dispose local controller
+    super.dispose();
+  }
+
+  // --- NEW: Handle Nav Bar Tap ---
+  void handleNavTap() {
+    if (_tabController.index == 0) {
+      // Tab 0: Edit Tags -> Call child's method via Key
+      _editTagsKey.currentState?.scrollToTop();
+    } else {
+      // Tab 1: Attributes -> Use local controller
+      if (_attributesScrollController.hasClients) {
+        _attributesScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    }
   }
 
   void _refresh() {
@@ -55,9 +88,7 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
             fontSize: 17,
           ),
         ),
-        // --- RESTORED ACTIONS ---
         actions: [
-          // Only show "Add Category" if we are on the first tab (Tags)
           if (_tabController.index == 0)
             IconButton(
               icon: const Icon(
@@ -87,6 +118,8 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
                 ),
                 child: TabBar(
                   controller: _tabController,
+                  dividerColor: Colors.transparent,
+                  dividerHeight: 0,
                   indicator: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
@@ -110,7 +143,6 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
                     Tab(text: "Group Tags"),
                     Tab(text: "Custom Attributes"),
                   ],
-                  dividerColor: Colors.transparent,
                 ),
               ),
             ],
@@ -119,15 +151,20 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-
+        physics: const NeverScrollableScrollPhysics(),
         children: [
-          // TAB 1: TAGS
-          EditTagsScreen(storage: widget.storage, onUpdate: widget.onUpdate),
+          // TAB 1: Pass the key here
+          EditTagsScreen(
+            key: _editTagsKey,
+            storage: widget.storage,
+            onUpdate: widget.onUpdate,
+          ),
 
-          // TAB 2: ATTRIBUTES
+          // TAB 2: Pass the controller here
           _AttributesManager(
             storage: widget.storage,
             onUpdate: widget.onUpdate,
+            scrollController: _attributesScrollController,
           ),
         ],
       ),
@@ -138,7 +175,13 @@ class _ManageLibraryScreenState extends State<ManageLibraryScreen>
 class _AttributesManager extends StatefulWidget {
   final StorageService storage;
   final VoidCallback? onUpdate;
-  const _AttributesManager({required this.storage, this.onUpdate});
+  final ScrollController scrollController; // Receive controller
+
+  const _AttributesManager({
+    required this.storage,
+    this.onUpdate,
+    required this.scrollController,
+  });
 
   @override
   State<_AttributesManager> createState() => _AttributesManagerState();
@@ -180,6 +223,8 @@ class _AttributesManagerState extends State<_AttributesManager> {
                 ),
               )
             : ListView.separated(
+                controller: widget.scrollController, // Attach controller
+                key: const PageStorageKey('attributes_list'),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 itemCount: customAttrs.length,
                 separatorBuilder: (c, i) => const SizedBox(height: 12),
@@ -203,11 +248,10 @@ class _AttributesManagerState extends State<_AttributesManager> {
                       subtitle: Text("Type: ${attr.type.name.toUpperCase()}"),
                       trailing: IconButton(
                         icon: const Icon(
-                          CupertinoIcons.ellipsis, // Changed to Ellipsis
+                          CupertinoIcons.ellipsis,
                           size: 18,
-                          color: Colors.grey, // Changed color to grey
+                          color: Colors.grey,
                         ),
-                        // --- UPDATED ACTION ---
                         onPressed: () {
                           showAttributeOptionsDialog(
                             context,

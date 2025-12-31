@@ -33,14 +33,20 @@ class FolderScreen extends StatefulWidget {
   });
 
   @override
-  State<FolderScreen> createState() => _FolderScreenState();
+  State<FolderScreen> createState() => FolderScreenState();
 }
 
-class _FolderScreenState extends State<FolderScreen> {
+// Changed from _FolderScreenState to FolderScreenState (Public) so GlobalKey works
+class FolderScreenState extends State<FolderScreen> {
   List<AppEntry> _allFolderEntries = [];
   Set<String> _activeTags = {};
 
   final TextEditingController _searchController = TextEditingController();
+
+  // --- NEW: Scroll Controller ---
+  final ScrollController _scrollController = ScrollController();
+  final ScrollController _tagScrollController = ScrollController();
+
   String _searchQuery = '';
   EntrySortOption _currentSort = EntrySortOption.dateCreatedNewest;
 
@@ -50,16 +56,51 @@ class _FolderScreenState extends State<FolderScreen> {
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
     }
-    _refresh();
+    refresh();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose(); // Dispose Controller
+    _tagScrollController.dispose(); // Don't forget to dispose
     super.dispose();
   }
 
-  void _refresh() {
+  void handleNavTap() {
+    // 1. If main grid is not at top, scroll main grid to top
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
+    // 2. If main grid IS at top, check filters
+    else if (widget.folder.id != 'untagged_special_id') {
+      bool didChange = false;
+
+      // A. Activate all tags if some are hidden
+      if (_activeTags.length < widget.folder.displayTags.length) {
+        setState(() {
+          _activeTags = Set.from(widget.folder.displayTags);
+        });
+        didChange = true;
+      }
+
+      // B. Scroll Tag Bar to start (NEW LOGIC)
+      if (_tagScrollController.hasClients && _tagScrollController.offset > 0) {
+        _tagScrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+        didChange = true;
+      }
+    }
+  }
+
+  void refresh() {
     final List<AppEntry> entries;
     if (widget.folder.id == 'untagged_special_id') {
       entries = widget.storage.getUntaggedEntries();
@@ -71,7 +112,12 @@ class _FolderScreenState extends State<FolderScreen> {
       setState(() {
         _allFolderEntries = entries;
         if (widget.folder.id != 'untagged_special_id') {
-          _activeTags = Set.from(widget.folder.displayTags);
+          // Keep active tags consistent with folder definition if updated
+          final currentTags = widget.folder.displayTags;
+          _activeTags = _activeTags.intersection(currentTags.toSet());
+          if (_activeTags.isEmpty && currentTags.isNotEmpty) {
+            _activeTags = currentTags.toSet();
+          }
         }
       });
     } else {
@@ -296,21 +342,12 @@ class _FolderScreenState extends State<FolderScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: Colors.black),
-          onPressed: () {
-            if (widget.onBack != null)
-              widget.onBack!();
-            else
-              Navigator.of(context).pop();
-          },
-        ),
+
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
         actions: [
-          // --- UPDATED ACTIONS: Only one button now ---
           if (widget.folder.id != 'untagged_special_id')
             IconButton(
               icon: const Icon(
@@ -318,12 +355,34 @@ class _FolderScreenState extends State<FolderScreen> {
                 color: Colors.black,
                 size: 20,
               ),
-              onPressed: () => showEditFolderDialog(
-                context,
-                widget.folder,
-                widget.storage,
-                _refresh,
-              ),
+              // Opens the Edit Folder sheet which contains the Delete option
+              onPressed: () async {
+                // 1. Capture tags BEFORE editing
+                final previousTags = Set<String>.from(
+                  widget.folder.displayTags,
+                );
+
+                // 2. Open Edit Dialog
+                await showEditFolderDialog(
+                  context,
+                  widget.folder,
+                  widget.storage,
+                  refresh, // This reloads the data from DB
+                );
+
+                // 3. Detect NEW tags added during edit
+                final currentTags = widget.folder.displayTags;
+                final addedTags = currentTags.where(
+                  (t) => !previousTags.contains(t),
+                );
+
+                // 4. Automatically activate new tags
+                if (addedTags.isNotEmpty) {
+                  setState(() {
+                    _activeTags.addAll(addedTags);
+                  });
+                }
+              },
             ),
         ],
       ),
@@ -337,6 +396,7 @@ class _FolderScreenState extends State<FolderScreen> {
                   height: 50,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: ListView.separated(
+                    controller: _tagScrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: widget.folder.displayTags.length,
@@ -400,6 +460,10 @@ class _FolderScreenState extends State<FolderScreen> {
                           ),
                         )
                       : MasonryGridView.count(
+                          controller: _scrollController,
+                          key: PageStorageKey(
+                            'folder_grid_${widget.folder.id}',
+                          ),
                           physics: const AlwaysScrollableScrollPhysics(
                             parent: BouncingScrollPhysics(),
                           ),
@@ -410,14 +474,24 @@ class _FolderScreenState extends State<FolderScreen> {
                           itemBuilder: (context, index) {
                             final entry = processedEntries[index];
                             return GestureDetector(
-                              onTap: () =>
-                                  widget.onEntryTap(entry), // TRIGGER CALLBACK
-                              child: EntryCard(
-                                entry: entry,
-                                visibleAttributes: visibleAttrs,
-                                tagColorResolver: widget.storage.getTagColor,
-                                registry: registry,
+                              onTap: () => widget.onEntryTap(entry),
+                              // --- NEW: Add Hero Widget ---
+                              child: Hero(
+                                tag:
+                                    'entry_hero_${entry.id}', // Unique tag based on ID
+                                // Material widget is needed to prevent text rendering issues during flight
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: EntryCard(
+                                    entry: entry,
+                                    visibleAttributes: visibleAttrs,
+                                    tagColorResolver:
+                                        widget.storage.getTagColor,
+                                    registry: registry,
+                                  ),
+                                ),
                               ),
+                              // ---------------------------
                             );
                           },
                         ),
@@ -510,11 +584,11 @@ class _FolderScreenState extends State<FolderScreen> {
                     await showAddEntryDialog(
                       context,
                       widget.storage,
-                      _refresh,
+                      refresh,
                       prefillTags: prefillTags,
                       restrictToAttributes: widget.folder.visibleAttributes,
                     );
-                    _refresh();
+                    refresh();
                   },
                   child: Container(
                     height: 50,
@@ -530,7 +604,7 @@ class _FolderScreenState extends State<FolderScreen> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.add, color: Colors.white),
+                    child: const Icon(CupertinoIcons.add, color: Colors.white),
                   ),
                 ),
               ],

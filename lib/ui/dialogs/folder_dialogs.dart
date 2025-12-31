@@ -5,10 +5,11 @@ import '../../models.dart';
 import '../../attributes.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/attribute_selector.dart';
-import '../widgets/delete_trigger_button.dart'; // Import
+import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
+import 'tag_dialogs.dart';
 
-// ... [showAddFolderDialog remains unchanged] ...
+// --- ADD FOLDER DIALOG (Unchanged) ---
 Future<void> showAddFolderDialog(
   BuildContext context,
   StorageService storage,
@@ -128,7 +129,7 @@ Future<void> showAddFolderDialog(
   );
 }
 
-// ... [showEditFolderDialog UPDATED] ...
+// --- EDIT FOLDER DIALOG (Updated Logic) ---
 Future<void> showEditFolderDialog(
   BuildContext context,
   AppFolder folder,
@@ -142,7 +143,6 @@ Future<void> showEditFolderDialog(
   return showCupertinoModalPopup(
     context: context,
     builder: (context) {
-      // ... [State setup] ...
       List<String> selectedTags = List.from(folder.displayTags);
       List<String> visibleAttributes = List.from(folder.visibleAttributes);
       final customAttrs = storage.getCustomAttributes();
@@ -154,7 +154,6 @@ Future<void> showEditFolderDialog(
           return BaseBottomSheet(
             title: "Edit Folder",
             onSave: () async {
-              // ... [Save Logic] ...
               if (titleController.text.isNotEmpty) {
                 folder.setAttribute('title', titleController.text);
                 folder.setAttribute('displayTags', selectedTags);
@@ -167,7 +166,6 @@ Future<void> showEditFolderDialog(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ... [TextFields & Tag Selectors & Attribute Selector] ...
                 CupertinoTextField(
                   controller: titleController,
                   placeholder: "Folder Name",
@@ -177,9 +175,121 @@ Future<void> showEditFolderDialog(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
+
                 const SizedBox(height: 24),
-                // ... (Tags UI) ...
-                // ... (Attribute UI) ...
+
+                // --- HEADER WITH ADD BUTTON ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Filter by Tags",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    // Quick Add Tag Button
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 0,
+                      child: const Row(
+                        children: [
+                          Icon(CupertinoIcons.add, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            "New Tag",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onPressed: () async {
+                        // 1. Open Dialog and wait for result
+                        final newTag = await showAddTagDialog(
+                          context,
+                          storage,
+                          onUpdate,
+                        );
+
+                        // 2. If a tag was created, select it immediately
+                        if (newTag != null && newTag.isNotEmpty) {
+                          setState(() {
+                            selectedTags.add(newTag);
+                          });
+                        } else {
+                          // Still refresh to show the list in case something changed
+                          setState(() {});
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (allTags.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        "No tags available",
+                        style: TextStyle(
+                          color: CupertinoColors.systemGrey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: allTags.map((tag) {
+                      final isSelected = selectedTags.contains(tag);
+                      final catColor = storage.getTagColor(tag);
+                      return GestureDetector(
+                        onTap: () => setState(
+                          () => isSelected
+                              ? selectedTags.remove(tag)
+                              : selectedTags.add(tag),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? catColor.withOpacity(0.2)
+                                : CupertinoColors.systemGrey6,
+                            borderRadius: BorderRadius.circular(12),
+                            border: isSelected
+                                ? Border.all(color: catColor)
+                                : null,
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isSelected ? Colors.black : Colors.black,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                const SizedBox(height: 32),
+                const Text(
+                  "Card Layout",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const SizedBox(height: 12),
                 AttributeSelector(
                   initialSelection: visibleAttributes,
                   availableAttributes: allEntryAttrs,

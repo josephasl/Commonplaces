@@ -4,12 +4,11 @@ import 'package:uuid/uuid.dart';
 import '../../storage_service.dart';
 import '../../models.dart';
 import '../widgets/base_bottom_sheet.dart';
-import '../widgets/delete_trigger_button.dart'; // Import
-import 'confirm_dialog.dart'; // Import
+import '../widgets/delete_trigger_button.dart';
+import 'confirm_dialog.dart';
 
 // --- CATEGORY DIALOGS ---
 
-// ... [showAddCategoryDialog remains unchanged] ...
 Future<void> showAddCategoryDialog(
   BuildContext context,
   StorageService storage,
@@ -80,7 +79,6 @@ Future<void> showAddCategoryDialog(
   );
 }
 
-// ... [showEditCategoryDialog UPDATED] ...
 Future<void> showEditCategoryDialog(
   BuildContext context,
   StorageService storage,
@@ -116,12 +114,6 @@ Future<void> showEditCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Name",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-              const SizedBox(height: 12),
-
               CupertinoTextField(
                 controller: nameController,
                 placeholder: "Category Name",
@@ -131,7 +123,7 @@ Future<void> showEditCategoryDialog(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
               const Text(
                 "Color",
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
@@ -152,8 +144,8 @@ Future<void> showEditCategoryDialog(
                 (i) => setState(() => selectedIconIndex = i),
               ),
 
-              // --- UPDATED DELETE BUTTON ---
-              const SizedBox(height: 24),
+              // --- UNIFIED DELETE BUTTON ---
+              const SizedBox(height: 40),
               DeleteTriggerButton(
                 label: "Delete Category",
                 onPressed: () {
@@ -178,16 +170,16 @@ Future<void> showEditCategoryDialog(
   );
 }
 
-// ... [showAddTagDialog, showRenameTagDialog, showMoveTagDialog are unchanged except imports] ...
-// I will include them for completeness so you can copy the file
+// --- TAG DIALOGS ---
 
-Future<void> showAddTagDialog(
+// Returns Future<String?> so caller can detect the new tag
+Future<String?> showAddTagDialog(
   BuildContext context,
   StorageService storage,
   VoidCallback onUpdate,
 ) {
   final controller = TextEditingController();
-  return showCupertinoModalPopup(
+  return showCupertinoModalPopup<String>(
     context: context,
     builder: (ctx) => BaseBottomSheet(
       title: "New Tag",
@@ -195,41 +187,30 @@ Future<void> showAddTagDialog(
         if (controller.text.isNotEmpty) {
           await storage.addGlobalTag(controller.text);
           onUpdate();
-          if (ctx.mounted) Navigator.pop(ctx);
+          if (ctx.mounted) Navigator.pop(ctx, controller.text);
         }
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Name",
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-          ),
-          const SizedBox(height: 12),
-          CupertinoTextField(
-            controller: controller,
-            placeholder: "Tag Name",
-            padding: const EdgeInsets.all(12),
-            autofocus: true,
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            onSubmitted: (_) async {
-              if (controller.text.isNotEmpty) {
-                await storage.addGlobalTag(controller.text);
-                onUpdate();
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-          ),
-        ],
+      child: CupertinoTextField(
+        controller: controller,
+        placeholder: "Tag Name",
+        padding: const EdgeInsets.all(12),
+        autofocus: true,
+        decoration: BoxDecoration(
+          color: CupertinoColors.systemGrey6,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        onSubmitted: (_) async {
+          if (controller.text.isNotEmpty) {
+            await storage.addGlobalTag(controller.text);
+            onUpdate();
+            if (ctx.mounted) Navigator.pop(ctx, controller.text);
+          }
+        },
       ),
     ),
   );
 }
 
-// ... [showTagOptionsDialog UPDATED] ...
 Future<void> showTagOptionsDialog(
   BuildContext context,
   StorageService storage,
@@ -252,11 +233,6 @@ Future<void> showTagOptionsDialog(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Name",
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-          ),
-          const SizedBox(height: 12),
           // 1. Rename Field
           CupertinoTextField(
             controller: controller,
@@ -275,13 +251,13 @@ Future<void> showTagOptionsDialog(
             },
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
+          const Divider(height: 1),
 
-          // 2. Move to Category (Now a matching button)
+          // 2. Move to Category (Button style to match Delete)
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              // Light blue background to distinguish from Delete (Red)
               color: CupertinoColors.activeBlue.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
               onPressed: () {
@@ -299,9 +275,9 @@ Future<void> showTagOptionsDialog(
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
 
-          // 3. Delete Tag
+          // 3. Unified Delete Button
           DeleteTriggerButton(
             label: "Delete Tag",
             onPressed: () {
@@ -323,7 +299,6 @@ Future<void> showTagOptionsDialog(
     ),
   );
 }
-// ... [Helpers and MoveTagDialog remain same] ...
 
 Future<void> showMoveTagDialog(
   BuildContext context,
@@ -394,40 +369,7 @@ Future<void> showMoveTagDialog(
   );
 }
 
-Widget _buildOptionTile({
-  required IconData icon,
-  required String label,
-  required Color color,
-  required VoidCallback onTap,
-}) {
-  return GestureDetector(
-    onTap: onTap,
-    behavior: HitTestBehavior.opaque,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 16),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Spacer(),
-          Icon(
-            CupertinoIcons.right_chevron,
-            color: Colors.grey.shade400,
-            size: 16,
-          ),
-        ],
-      ),
-    ),
-  );
-}
+// --- HELPERS ---
 
 Widget _buildColorPicker(int selectedIndex, Function(int) onSelect) {
   return SingleChildScrollView(

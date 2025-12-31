@@ -9,14 +9,12 @@ class EntryScreen extends StatefulWidget {
   final AppEntry entry;
   final AppFolder folder;
   final StorageService storage;
-  final VoidCallback onBack;
 
   const EntryScreen({
     super.key,
     required this.entry,
     required this.folder,
     required this.storage,
-    required this.onBack,
   });
 
   @override
@@ -24,113 +22,92 @@ class EntryScreen extends StatefulWidget {
 }
 
 class _EntryScreenState extends State<EntryScreen> {
-  double _dragOffset = 0;
-
   @override
   Widget build(BuildContext context) {
     final visibleKeys = widget.folder.visibleAttributes;
-    final customAttrs = widget.storage.getCustomAttributes(); // Fetch customs
-    final registry = getAttributeRegistry(customAttrs); // Merge
+    final customAttrs = widget.storage.getCustomAttributes();
+    final registry = getAttributeRegistry(customAttrs);
 
+    // --- NEW: Gesture Detector for Full-Screen Back Swipe ---
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragUpdate: (details) {
-        if (details.primaryDelta! < 0) {
-          setState(() {
-            _dragOffset += details.primaryDelta!;
-          });
+      // Allow horizontal drag to override other gestures if needed
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: (details) {
+        // Detect swipe direction and velocity
+        // primaryVelocity > 0 means swiping Right (Left-to-Right)
+        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+          Navigator.of(context).pop();
         }
       },
-      onVerticalDragEnd: (details) {
-        if (_dragOffset < -100 || (details.primaryVelocity ?? 0) < -200) {
-          widget.onBack();
-        } else {
-          setState(() {
-            _dragOffset = 0;
-          });
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
-        transform: Matrix4.translationValues(0, _dragOffset, 0),
-        child: Scaffold(
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
           backgroundColor: Colors.white,
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(CupertinoIcons.back, color: Colors.black),
-              onPressed: widget.onBack,
-            ),
-            title: Text(
-              widget.entry.getAttribute<String>('title') ?? "Entry",
-              style: const TextStyle(
+          elevation: 0,
+          leading: const BackButton(color: Colors.black),
+          actions: [
+            IconButton(
+              icon: const Icon(
+                CupertinoIcons.ellipsis,
                 color: Colors.black,
-                fontWeight: FontWeight.w600,
+                size: 20,
               ),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(
-                  CupertinoIcons.ellipsis,
-                  color: Colors.black,
-                  size: 20,
-                ),
-                onPressed: () => showEditEntryDialog(
-                  context,
-                  widget.entry,
-                  widget.folder,
-                  widget.storage,
-                  () {
-                    final all = widget.storage.getAllEntries();
-                    final exists = all.any((e) => e.id == widget.entry.id);
+              onPressed: () => showEditEntryDialog(
+                context,
+                widget.entry,
+                widget.folder,
+                widget.storage,
+                () {
+                  final all = widget.storage.getAllEntries();
+                  final exists = all.any((e) => e.id == widget.entry.id);
 
-                    if (!exists) {
-                      widget.onBack();
-                    } else {
-                      setState(() {});
-                    }
-                  },
-                ),
-              ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1.0),
-              child: Container(color: Colors.grey.shade200, height: 1.0),
-            ),
-          ),
-          body: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...visibleKeys.map((key) {
-                  final definition = registry[key]; // Use the merged registry
-                  if (definition == null) return const SizedBox.shrink();
-                  // ...
-                  final value = widget.entry.getAttribute(key);
-
-                  // --- CHANGED LOGIC HERE ---
-                  final bool isEmpty =
-                      value == null || value.toString().isEmpty;
-
-                  // If it's empty AND NOT an image, hide it.
-                  // If it IS an image, we let it pass through so the placeholder shows.
-                  if (isEmpty && definition.type != AttributeValueType.image) {
-                    return const SizedBox.shrink();
+                  if (!exists) {
+                    Navigator.of(context).pop();
+                  } else {
+                    setState(() {});
                   }
-                  // --------------------------
+                },
+              ),
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1.0),
+            child: Container(color: Colors.grey.shade200, height: 1.0),
+          ),
+        ),
+        // --- HERO WRAPPER ---
+        body: Hero(
+          tag: 'entry_hero_${widget.entry.id}',
+          child: Material(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...visibleKeys.map((key) {
+                    final definition = registry[key];
+                    if (definition == null) return const SizedBox.shrink();
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24.0),
-                    child: _buildAttributeDisplay(definition, value),
-                  );
-                }).toList(),
-              ],
+                    final value = widget.entry.getAttribute(key);
+                    final bool isEmpty =
+                        value == null || value.toString().isEmpty;
+
+                    if (isEmpty &&
+                        definition.type != AttributeValueType.image) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 24.0),
+                      child: _buildAttributeDisplay(definition, value),
+                    );
+                  }).toList(),
+                ],
+              ),
             ),
           ),
         ),
@@ -156,7 +133,7 @@ class _EntryScreenState extends State<EntryScreen> {
                     fit: BoxFit.cover,
                     errorBuilder: (c, e, s) => _buildPlaceholder(),
                   )
-                : _buildPlaceholder(), // This will now trigger if value is null/empty
+                : _buildPlaceholder(),
           ),
         ],
       );
