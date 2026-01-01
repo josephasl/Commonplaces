@@ -55,7 +55,7 @@ Future<void> showAddAttributeDialog(
               const SizedBox(height: 8),
               CupertinoTextField(
                 controller: labelController,
-                placeholder: "e.g. Author, Pages, Genre",
+                placeholder: "e.g. My Rating, Released, Notes",
                 padding: const EdgeInsets.all(12),
                 autofocus: true,
                 decoration: BoxDecoration(
@@ -87,27 +87,10 @@ Future<void> showAddAttributeDialog(
                     if (val != null) setState(() => selectedType = val);
                   },
                   children: const {
-                    AttributeValueType.text: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        "Text",
-                        style: TextStyle(fontFamily: '.SF Pro Text'),
-                      ),
-                    ),
-                    AttributeValueType.number: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        "Num",
-                        style: TextStyle(fontFamily: '.SF Pro Text'),
-                      ),
-                    ),
-                    AttributeValueType.date: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        "Date",
-                        style: TextStyle(fontFamily: '.SF Pro Text'),
-                      ),
-                    ),
+                    AttributeValueType.text: Text("Text"),
+                    AttributeValueType.number: Text("Num"),
+                    AttributeValueType.date: Text("Date"),
+                    AttributeValueType.rating: Text("Rate"),
                   },
                 ),
               ),
@@ -126,14 +109,12 @@ Future<void> showAttributeOptionsDialog(
   AttributeDefinition attribute,
   VoidCallback onUpdate,
 ) {
-  // 1. Initialize controller with current name
   final controller = TextEditingController(text: attribute.label);
 
   return showCupertinoModalPopup(
     context: context,
     builder: (ctx) => BaseBottomSheet(
       title: "Edit Attribute",
-      // 2. Handle Rename on Save
       onSave: () async {
         if (controller.text.isNotEmpty && controller.text != attribute.label) {
           final updatedAttr = AttributeDefinition(
@@ -161,7 +142,6 @@ Future<void> showAttributeOptionsDialog(
             ),
           ),
           const SizedBox(height: 8),
-          // 3. Rename Input Field
           CupertinoTextField(
             controller: controller,
             placeholder: "Attribute Name",
@@ -191,38 +171,29 @@ Future<void> showAttributeOptionsDialog(
               if (ctx.mounted) Navigator.pop(ctx);
             },
           ),
-
           const SizedBox(height: 32),
-
-          // 4. Unified Delete Button
           DeleteTriggerButton(
             label: "Delete Attribute",
             onPressed: () {
-              Navigator.pop(ctx); // Close options first
+              Navigator.pop(ctx);
               showDeleteConfirmationDialog(
                 context: context,
                 title: "Delete Attribute?",
                 message: "Delete '${attribute.label}'?",
                 subtitle: "This will remove this data field from all entries.",
                 onConfirm: () async {
-                  // A. Delete the definition
                   await storage.deleteCustomAttribute(attribute.key);
-
-                  // B. CLEANUP: Remove this attribute from all Folders that have it active
+                  // Clean up folders that reference this attribute
                   final allFolders = storage.getAllFolders();
                   for (var folder in allFolders) {
                     if (folder.visibleAttributes.contains(attribute.key)) {
-                      // Create a copy of the list and remove the key
                       final updatedAttrs = List<String>.from(
                         folder.visibleAttributes,
                       )..remove(attribute.key);
-
                       folder.setVisibleAttributes(updatedAttrs);
                       await storage.saveFolder(folder);
                     }
                   }
-
-                  // C. Update UI
                   onUpdate();
                 },
               );

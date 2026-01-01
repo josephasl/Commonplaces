@@ -1,6 +1,4 @@
-// attributes.dart
-
-enum AttributeValueType { text, number, date, image, list }
+enum AttributeValueType { text, number, date, image, list, rating }
 
 enum AttributeApplyType { entriesOnly, foldersOnly, both }
 
@@ -40,6 +38,7 @@ class AttributeDefinition {
 }
 
 // 1. HARDCODED SYSTEM ATTRIBUTES
+// Removed 'notes' and 'starRating'. Defaults are now title, tag, image, dates.
 const Map<String, AttributeDefinition> _systemAttributes = {
   "image": AttributeDefinition(
     key: "image",
@@ -74,20 +73,6 @@ const Map<String, AttributeDefinition> _systemAttributes = {
     label: "Sort Order",
     type: AttributeValueType.text,
     applyType: AttributeApplyType.foldersOnly,
-    isSystemField: true,
-  ),
-  "starRating": AttributeDefinition(
-    key: "starRating",
-    label: "Rating",
-    type: AttributeValueType.number,
-    applyType: AttributeApplyType.entriesOnly,
-    isSystemField: true,
-  ),
-  "notes": AttributeDefinition(
-    key: "notes",
-    label: "Notes",
-    type: AttributeValueType.text,
-    applyType: AttributeApplyType.entriesOnly,
     isSystemField: true,
   ),
   "dateCreated": AttributeDefinition(

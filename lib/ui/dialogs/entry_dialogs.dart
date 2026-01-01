@@ -93,7 +93,7 @@ Future<void> _showEntryDialog({
   for (var def in formAttributes) {
     if (def.key != 'tag' &&
         def.type != AttributeValueType.date &&
-        !(def.type == AttributeValueType.number && def.key == 'starRating')) {
+        def.type != AttributeValueType.rating) {
       textControllers[def.key] = TextEditingController(
         text: formValues[def.key]?.toString() ?? '',
       );
@@ -199,7 +199,6 @@ Widget _buildFlatFormSection({
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      // 1. LABEL
       Text(
         def.label,
         style: const TextStyle(
@@ -211,7 +210,6 @@ Widget _buildFlatFormSection({
       ),
       const SizedBox(height: 8),
 
-      // 2. INPUT FIELD
       if (def.key == 'tag') ...[
         // -- TAGS --
         CupertinoTextField(
@@ -299,13 +297,14 @@ Widget _buildFlatFormSection({
             },
           ),
         ),
-      ] else if (def.key == 'starRating') ...[
+      ] else if (def.type == AttributeValueType.rating) ...[
         // -- RATING --
         Row(
           children: List.generate(5, (index) {
             final rating = (formValues[def.key] ?? 0) as int;
             return GestureDetector(
               onTap: () {
+                // Toggle: If clicking same value, reset to 0
                 formValues[def.key] = (rating == index + 1) ? 0 : index + 1;
                 onStateChange();
               },
@@ -330,7 +329,8 @@ Widget _buildFlatFormSection({
               ? "Paste image URL"
               : "Enter ${def.label.toLowerCase()}...",
           padding: const EdgeInsets.all(12),
-          maxLines: def.key == 'notes' ? 4 : 1,
+          // Dynamic multiline check for any field named "notes"
+          maxLines: def.label.toLowerCase().contains('note') ? 4 : 1,
           keyboardType: def.type == AttributeValueType.number
               ? const TextInputType.numberWithOptions(decimal: true)
               : TextInputType.text,
@@ -350,7 +350,6 @@ Widget _buildFlatFormSection({
         ),
       ],
 
-      // 3. SPACER BETWEEN SECTIONS
       const SizedBox(height: 24),
     ],
   );

@@ -10,7 +10,6 @@ class EntryScreen extends StatefulWidget {
   final int initialIndex;
   final AppFolder folder;
   final StorageService storage;
-  // --- NEW: Callback for scroll events ---
   final Function(AppEntry) onEntryChanged;
 
   const EntryScreen({
@@ -19,7 +18,7 @@ class EntryScreen extends StatefulWidget {
     required this.initialIndex,
     required this.folder,
     required this.storage,
-    required this.onEntryChanged, // Required now
+    required this.onEntryChanged,
   });
 
   @override
@@ -129,7 +128,6 @@ class _EntryScreenState extends State<EntryScreen> {
                   setState(() {
                     _currentIndex = index;
                   });
-                  // --- NEW: Trigger the callback when entry changes ---
                   if (index < widget.entries.length) {
                     widget.onEntryChanged(widget.entries[index]);
                   }
@@ -208,6 +206,29 @@ class _EntryScreenState extends State<EntryScreen> {
         ],
       );
     }
+
+    // RATING DISPLAY
+    if (def.type == AttributeValueType.rating) {
+      final rating = (value is int)
+          ? value
+          : int.tryParse(value.toString()) ?? 0;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLabel(def.label),
+          Row(
+            children: List.generate(5, (index) {
+              return Icon(
+                index < rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                color: CupertinoColors.systemYellow,
+                size: 24,
+              );
+            }),
+          ),
+        ],
+      );
+    }
+
     if (def.key == 'tag') {
       List<String> tags = (value is List)
           ? value.map((e) => e.toString()).toList()
@@ -240,6 +261,8 @@ class _EntryScreenState extends State<EntryScreen> {
         ],
       );
     }
+
+    // DEFAULT TEXT DISPLAY (Handles Dates too for now as raw strings)
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

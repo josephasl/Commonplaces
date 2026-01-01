@@ -60,9 +60,11 @@ Future<void> _showFolderDialog({
       List<String> selectedTags = isEditMode
           ? List.from(folderToEdit!.displayTags)
           : [];
+
+      // Removed 'notes' from default defaults.
       List<String> visibleAttributes = isEditMode
           ? List.from(folderToEdit!.visibleAttributes)
-          : ['title', 'tag', 'notes'];
+          : ['title', 'tag'];
 
       final customAttrs = storage.getCustomAttributes();
       final allEntryAttrs = getEntryAttributes(customAttrs);
@@ -270,6 +272,7 @@ Future<void> _showFolderDialog({
                     color: Colors.black,
                   ),
                 ),
+                const SizedBox(height: 8),
                 AttributeSelector(
                   initialSelection: visibleAttributes,
                   availableAttributes: allEntryAttrs,

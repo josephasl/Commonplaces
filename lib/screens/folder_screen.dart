@@ -7,17 +7,6 @@ import '../cards.dart';
 import '../dialogs.dart';
 import '../attributes.dart';
 
-enum EntrySortOption {
-  dateCreatedNewest,
-  dateCreatedOldest,
-  titleAsc,
-  titleDesc,
-  ratingHighLow,
-  ratingLowHigh,
-  noteLengthAsc,
-  noteLengthDesc,
-}
-
 class FolderScreen extends StatefulWidget {
   final AppFolder folder;
   final StorageService storage;
@@ -45,11 +34,12 @@ class FolderScreenState extends State<FolderScreen> {
   final ScrollController _tagScrollController = ScrollController();
 
   String _searchQuery = '';
-  EntrySortOption _currentSort = EntrySortOption.dateCreatedNewest;
+
+  // --- SORTING STATE ---
+  String _sortAttributeKey = 'dateCreated';
+  bool _isAscending = false;
 
   String? _lastViewedEntryId;
-
-  // --- NEW: Track touch start for Listener ---
   Offset _dragStart = Offset.zero;
 
   void updateLastViewedEntry(String id) {
@@ -61,6 +51,12 @@ class FolderScreenState extends State<FolderScreen> {
     super.initState();
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
+    }
+    // Set default sort
+    if (!widget.folder.visibleAttributes.contains('dateCreated') &&
+        widget.folder.visibleAttributes.isNotEmpty) {
+      _sortAttributeKey = widget.folder.visibleAttributes.first;
+      _isAscending = true;
     }
     refresh();
   }
@@ -74,6 +70,7 @@ class FolderScreenState extends State<FolderScreen> {
   }
 
   void handleNavTap() {
+    if (!mounted) return;
     if (_scrollController.hasClients && _scrollController.offset > 0) {
       _scrollController.animateTo(
         0,
@@ -81,12 +78,10 @@ class FolderScreenState extends State<FolderScreen> {
         curve: Curves.easeOut,
       );
     } else if (widget.folder.id != 'untagged_special_id') {
-      bool didChange = false;
       if (_activeTags.length < widget.folder.displayTags.length) {
         setState(() {
           _activeTags = Set.from(widget.folder.displayTags);
         });
-        didChange = true;
       }
       if (_tagScrollController.hasClients && _tagScrollController.offset > 0) {
         _tagScrollController.animateTo(
@@ -94,7 +89,6 @@ class FolderScreenState extends State<FolderScreen> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
-        didChange = true;
       }
     }
   }
@@ -123,104 +117,87 @@ class FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  void _showSortSheet() {
-    final visible = widget.folder.visibleAttributes;
-    final List<CupertinoActionSheetAction> actions = [];
+  // --- REFACTORED SORT LOGIC (Async Pattern) ---
+  Future<void> _showSortSheet() async {
+    final customAttrs = widget.storage.getCustomAttributes();
+    final registry = getAttributeRegistry(customAttrs);
 
-    actions.add(
-      CupertinoActionSheetAction(
-        onPressed: () {
-          setState(() => _currentSort = EntrySortOption.dateCreatedNewest);
-          Navigator.pop(context);
-        },
-        child: const Text("Date Created (Newest)"),
-      ),
-    );
-    actions.add(
-      CupertinoActionSheetAction(
-        onPressed: () {
-          setState(() => _currentSort = EntrySortOption.dateCreatedOldest);
-          Navigator.pop(context);
-        },
-        child: const Text("Date Created (Oldest)"),
-      ),
+    final List<String> sortableKeys = List.from(
+      widget.folder.visibleAttributes,
     );
 
-    if (visible.contains('title')) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.titleAsc);
-            Navigator.pop(context);
-          },
-          child: const Text("Title (A-Z)"),
-        ),
-      );
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.titleDesc);
-            Navigator.pop(context);
-          },
-          child: const Text("Title (Z-A)"),
-        ),
-      );
-    }
-
-    if (visible.contains('starRating')) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.ratingHighLow);
-            Navigator.pop(context);
-          },
-          child: const Text("Rating (High to Low)"),
-        ),
-      );
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.ratingLowHigh);
-            Navigator.pop(context);
-          },
-          child: const Text("Rating (Low to High)"),
-        ),
-      );
-    }
-
-    if (visible.contains('notes')) {
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.noteLengthDesc);
-            Navigator.pop(context);
-          },
-          child: const Text("Note Length (Longest)"),
-        ),
-      );
-      actions.add(
-        CupertinoActionSheetAction(
-          onPressed: () {
-            setState(() => _currentSort = EntrySortOption.noteLengthAsc);
-            Navigator.pop(context);
-          },
-          child: const Text("Note Length (Shortest)"),
-        ),
-      );
-    }
-
-    showCupertinoModalPopup(
+    // 1. AWAIT the user's selection
+    final String? selectedKey = await showCupertinoModalPopup<String>(
       context: context,
+      // Use 'ctx' for the dialog context to ensure we pop ONLY the dialog
       builder: (ctx) => CupertinoActionSheet(
         title: const Text("Sort Entries By"),
-        actions: actions,
+        message: const Text("Tap again to toggle order"),
+        actions: sortableKeys.map((key) {
+          final def = registry[key];
+          // Use 'Container()' or exclude via where() if null to avoid crash
+          if (def == null) return Container();
+
+          final isSelected = _sortAttributeKey == key;
+          String label = def.label;
+
+          IconData? icon;
+          if (isSelected) {
+            icon = _isAscending
+                ? CupertinoIcons.arrow_up
+                : CupertinoIcons.arrow_down;
+          }
+
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              // 2. Return the KEY, do not setState here
+              Navigator.of(ctx).pop(key);
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label),
+                if (isSelected) ...[
+                  const SizedBox(width: 8),
+                  Icon(icon, size: 16, color: CupertinoColors.activeBlue),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
         cancelButton: CupertinoActionSheetAction(
           isDefaultAction: true,
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () => Navigator.of(ctx).pop(null),
           child: const Text("Cancel"),
         ),
       ),
     );
+
+    // 3. If nothing selected or widget closed, stop
+    if (selectedKey == null || !mounted) return;
+
+    // 4. Update State safely AFTER dialog is closed
+    setState(() {
+      final def = registry[selectedKey];
+
+      if (_sortAttributeKey == selectedKey) {
+        // Same key = Toggle direction
+        _isAscending = !_isAscending;
+      } else {
+        // New key = Select key
+        _sortAttributeKey = selectedKey;
+
+        // Set Default Direction based on Type
+        if (def?.type == AttributeValueType.date ||
+            def?.type == AttributeValueType.number ||
+            def?.type == AttributeValueType.rating ||
+            def?.type == AttributeValueType.image) {
+          _isAscending = false;
+        } else {
+          _isAscending = true;
+        }
+      }
+    });
   }
 
   void _openLastViewedEntry(List<AppEntry> currentList) {
@@ -258,90 +235,58 @@ class FolderScreenState extends State<FolderScreen> {
     if (_searchQuery.isNotEmpty) {
       processedEntries = processedEntries.where((entry) {
         final title = (entry.getAttribute('title') ?? '').toString();
-        final notes = (entry.getAttribute('notes') ?? '').toString();
-        final query = _searchQuery.toLowerCase();
-        return title.toLowerCase().contains(query) ||
-            notes.toLowerCase().contains(query);
+        final searchStr = entry.attributes.values.join(' ').toLowerCase();
+        return searchStr.contains(_searchQuery.toLowerCase());
       }).toList();
     }
 
+    // --- SORT IMPLEMENTATION ---
     processedEntries.sort((a, b) {
-      switch (_currentSort) {
-        case EntrySortOption.dateCreatedNewest:
-          final da =
-              DateTime.tryParse(
-                a.getAttribute('dateCreated')?.toString() ?? '',
-              ) ??
-              DateTime(2000);
-          final db =
-              DateTime.tryParse(
-                b.getAttribute('dateCreated')?.toString() ?? '',
-              ) ??
-              DateTime(2000);
-          return db.compareTo(da);
-        case EntrySortOption.dateCreatedOldest:
-          final da =
-              DateTime.tryParse(
-                a.getAttribute('dateCreated')?.toString() ?? '',
-              ) ??
-              DateTime(2000);
-          final db =
-              DateTime.tryParse(
-                b.getAttribute('dateCreated')?.toString() ?? '',
-              ) ??
-              DateTime(2000);
-          return da.compareTo(db);
-        case EntrySortOption.titleAsc:
-          return (a.getAttribute('title') ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo(
-                (b.getAttribute('title') ?? '').toString().toLowerCase(),
-              );
-        case EntrySortOption.titleDesc:
-          return (b.getAttribute('title') ?? '')
-              .toString()
-              .toLowerCase()
-              .compareTo(
-                (a.getAttribute('title') ?? '').toString().toLowerCase(),
-              );
-        case EntrySortOption.ratingHighLow:
-          final ra = (a.getAttribute('starRating') ?? 0) as int;
-          final rb = (b.getAttribute('starRating') ?? 0) as int;
-          return rb.compareTo(ra);
-        case EntrySortOption.ratingLowHigh:
-          final ra = (a.getAttribute('starRating') ?? 0) as int;
-          final rb = (b.getAttribute('starRating') ?? 0) as int;
-          return ra.compareTo(rb);
-        case EntrySortOption.noteLengthAsc:
-          final na = (a.getAttribute('notes') ?? '').toString().length;
-          final nb = (b.getAttribute('notes') ?? '').toString().length;
-          return na.compareTo(nb);
-        case EntrySortOption.noteLengthDesc:
-          final na = (a.getAttribute('notes') ?? '').toString().length;
-          final nb = (b.getAttribute('notes') ?? '').toString().length;
-          return nb.compareTo(na);
+      final def = registry[_sortAttributeKey];
+
+      dynamic valA = a.getAttribute(_sortAttributeKey);
+      dynamic valB = b.getAttribute(_sortAttributeKey);
+
+      int result = 0;
+
+      // Handle nulls first to avoid crashes
+      if (valA == null && valB == null) return 0;
+      if (valA == null) return _isAscending ? -1 : 1;
+      if (valB == null) return _isAscending ? 1 : -1;
+
+      if (def?.type == AttributeValueType.image) {
+        final hasA = (valA.toString().isNotEmpty) ? 1 : 0;
+        final hasB = (valB.toString().isNotEmpty) ? 1 : 0;
+        result = hasA.compareTo(hasB);
+      } else if (def?.type == AttributeValueType.number ||
+          def?.type == AttributeValueType.rating) {
+        final numA = num.tryParse(valA.toString()) ?? 0;
+        final numB = num.tryParse(valB.toString()) ?? 0;
+        result = numA.compareTo(numB);
+      } else if (def?.type == AttributeValueType.date) {
+        final dateA = DateTime.tryParse(valA.toString()) ?? DateTime(2000);
+        final dateB = DateTime.tryParse(valB.toString()) ?? DateTime(2000);
+        result = dateA.compareTo(dateB);
+      } else {
+        result = valA.toString().toLowerCase().compareTo(
+          valB.toString().toLowerCase(),
+        );
       }
+
+      return _isAscending ? result : -result;
     });
 
     final visibleAttrs = widget.folder.visibleAttributes;
 
-    // --- REPLACED GestureDetector with Listener ---
-    // Listener does not claim the gesture, allowing the parent PageView to work.
     return Listener(
       onPointerDown: (event) {
         _dragStart = event.position;
       },
       onPointerUp: (event) {
         final delta = event.position - _dragStart;
-
-        // Logic:
-        // 1. Horizontal distance < -50 (Swipe Right-to-Left)
-        // 2. Vertical distance < 50 (Ensure it's not a scroll)
         if (delta.dx < -50 && delta.dy.abs() < 50) {
           _openLastViewedEntry(processedEntries);
         }
-        // Note: We don't handle L-to-R here; the parent PageView handles it automatically.
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -383,7 +328,7 @@ class FolderScreenState extends State<FolderScreen> {
                   final addedTags = currentTags.where(
                     (t) => !previousTags.contains(t),
                   );
-                  if (addedTags.isNotEmpty) {
+                  if (addedTags.isNotEmpty && mounted) {
                     setState(() {
                       _activeTags.addAll(addedTags);
                     });
@@ -413,6 +358,7 @@ class FolderScreenState extends State<FolderScreen> {
 
                         return GestureDetector(
                           onTap: () {
+                            if (!mounted) return;
                             setState(() {
                               if (isActive)
                                 _activeTags.remove(tag);
@@ -546,12 +492,15 @@ class FolderScreenState extends State<FolderScreen> {
                                   ),
                                   onPressed: () {
                                     _searchController.clear();
-                                    setState(() => _searchQuery = '');
+                                    if (mounted)
+                                      setState(() => _searchQuery = '');
                                   },
                                 )
                               : null,
                         ),
-                        onChanged: (val) => setState(() => _searchQuery = val),
+                        onChanged: (val) {
+                          if (mounted) setState(() => _searchQuery = val);
+                        },
                       ),
                     ),
                   ),
