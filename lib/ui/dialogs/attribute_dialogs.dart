@@ -6,7 +6,7 @@ import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 
-// --- ADD ATTRIBUTE (Unchanged) ---
+// --- ADD ATTRIBUTE ---
 Future<void> showAddAttributeDialog(
   BuildContext context,
   StorageService storage,
@@ -43,20 +43,40 @@ Future<void> showAddAttributeDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                "Field Name",
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 8),
               CupertinoTextField(
                 controller: labelController,
-                placeholder: "Field Name (e.g. Author)",
+                placeholder: "e.g. Author, Pages, Genre",
                 padding: const EdgeInsets.all(12),
                 autofocus: true,
                 decoration: BoxDecoration(
                   color: CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(8),
                 ),
+                style: const TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
                 "Field Type",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -69,15 +89,24 @@ Future<void> showAddAttributeDialog(
                   children: const {
                     AttributeValueType.text: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text("Text"),
+                      child: Text(
+                        "Text",
+                        style: TextStyle(fontFamily: '.SF Pro Text'),
+                      ),
                     ),
                     AttributeValueType.number: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text("Num"),
+                      child: Text(
+                        "Num",
+                        style: TextStyle(fontFamily: '.SF Pro Text'),
+                      ),
                     ),
                     AttributeValueType.date: Padding(
                       padding: EdgeInsets.symmetric(horizontal: 20),
-                      child: Text("Date"),
+                      child: Text(
+                        "Date",
+                        style: TextStyle(fontFamily: '.SF Pro Text'),
+                      ),
                     ),
                   },
                 ),
@@ -90,7 +119,7 @@ Future<void> showAddAttributeDialog(
   );
 }
 
-// --- MANAGE ATTRIBUTE (Updated to match Tag Options) ---
+// --- MANAGE ATTRIBUTE ---
 Future<void> showAttributeOptionsDialog(
   BuildContext context,
   StorageService storage,
@@ -124,9 +153,14 @@ Future<void> showAttributeOptionsDialog(
         children: [
           const Text(
             "Name",
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            style: TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Colors.black,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           // 3. Rename Input Field
           CupertinoTextField(
             controller: controller,
@@ -135,6 +169,11 @@ Future<void> showAttributeOptionsDialog(
             decoration: BoxDecoration(
               color: CupertinoColors.systemGrey6,
               borderRadius: BorderRadius.circular(8),
+            ),
+            style: const TextStyle(
+              fontFamily: '.SF Pro Text',
+              fontSize: 16,
+              color: Colors.black,
             ),
             onSubmitted: (_) async {
               if (controller.text.isNotEmpty &&
@@ -153,7 +192,7 @@ Future<void> showAttributeOptionsDialog(
             },
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
 
           // 4. Unified Delete Button
           DeleteTriggerButton(
@@ -166,7 +205,24 @@ Future<void> showAttributeOptionsDialog(
                 message: "Delete '${attribute.label}'?",
                 subtitle: "This will remove this data field from all entries.",
                 onConfirm: () async {
+                  // A. Delete the definition
                   await storage.deleteCustomAttribute(attribute.key);
+
+                  // B. CLEANUP: Remove this attribute from all Folders that have it active
+                  final allFolders = storage.getAllFolders();
+                  for (var folder in allFolders) {
+                    if (folder.visibleAttributes.contains(attribute.key)) {
+                      // Create a copy of the list and remove the key
+                      final updatedAttrs = List<String>.from(
+                        folder.visibleAttributes,
+                      )..remove(attribute.key);
+
+                      folder.setVisibleAttributes(updatedAttrs);
+                      await storage.saveFolder(folder);
+                    }
+                  }
+
+                  // C. Update UI
                   onUpdate();
                 },
               );

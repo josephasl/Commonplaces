@@ -30,8 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<FolderScreenState> _folderScreenKey = GlobalKey();
   final GlobalKey<NavigatorState> _folderNavigatorKey = GlobalKey();
 
-  // --- PHYSICS CONTROL ---
-  // Default to Bouncing (Swipe enabled)
   ScrollPhysics _pagePhysics = const BouncingScrollPhysics();
 
   String _searchQuery = '';
@@ -59,15 +57,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // --- NEW: Helper to lock/unlock PageView ---
   void _setPageSwipeEnabled(bool enabled) {
     final newPhysics = enabled
         ? const BouncingScrollPhysics()
         : const NeverScrollableScrollPhysics();
 
     if (_pagePhysics.runtimeType != newPhysics.runtimeType) {
-      // Use addPostFrameCallback to avoid "setState during build" errors
-      // if called from NavigatorObserver immediately
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           setState(() {
@@ -187,19 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
       _isEditing = false;
-      // Safety: If leaving the folder tab, re-enable scrolling
-      // (Unless we return to it later and it still has a stack,
-      //  but usually PageView resets gestures on switch)
-      if (index != 2) {
-        _pagePhysics = const BouncingScrollPhysics();
-      } else {
-        // If entering Folder tab, check if it has a stack and lock if needed
-        if (_folderNavigatorKey.currentState?.canPop() ?? false) {
-          _pagePhysics = const NeverScrollableScrollPhysics();
-        } else {
-          _pagePhysics = const BouncingScrollPhysics();
-        }
-      }
+      if (index != 2) _pagePhysics = const BouncingScrollPhysics();
     });
   }
 
@@ -223,14 +206,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       } else if (index == 2) {
-        // --- TAB 3 LOGIC ---
-        // A. If nested entries are open, Pop back to Folder List
         if (_folderNavigatorKey.currentState?.canPop() ?? false) {
           _folderNavigatorKey.currentState?.popUntil((route) => route.isFirst);
-          // Manually ensure physics are reset because popUntil might happen fast
-          _setPageSwipeEnabled(true);
         } else {
-          // B. If already at Folder List, scroll to top/reset tags
           _folderScreenKey.currentState?.handleNavTap();
         }
       }
@@ -279,7 +257,6 @@ class _HomeScreenState extends State<HomeScreen> {
           folderScreenKey: _folderScreenKey,
           onBack: () => _onBottomNavTapped(1),
           onDataChanged: _refreshData,
-          // Callback to parent: true = enable swipe, false = disable swipe
           onStackChanged: (isAtRoot) => _setPageSwipeEnabled(isAtRoot),
         ),
       );
@@ -313,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: PageView(
         controller: _pageController,
         onPageChanged: _onPageChanged,
-        physics: _pagePhysics, // Dynamic Physics attached here
+        physics: _pagePhysics,
         children: pages,
       ),
       bottomNavigationBar: Container(
@@ -476,7 +453,6 @@ class _HomeScreenState extends State<HomeScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CATEGORY CHIPS
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -499,8 +475,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
-              // GRID
               Expanded(
                 child: GestureDetector(
                   onTap: () {
@@ -528,8 +502,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-
-          // FLOATING BOTTOM BAR
           Positioned(
             bottom: 20,
             left: 16,
@@ -751,7 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- UPDATED FOLDER TAB with Observer Logic ---
+// --- FOLDER TAB & OBSERVER ---
 class FolderTab extends StatefulWidget {
   final AppFolder folder;
   final StorageService storage;
@@ -798,7 +770,7 @@ class _FolderTabState extends State<FolderTab>
     super.build(context);
     return Navigator(
       key: widget.navigatorKey,
-      observers: [_observer], // Cache observer so it doesn't detach/reattach
+      observers: [_observer],
       onGenerateRoute: (settings) {
         return CupertinoPageRoute(
           builder: (context) => FolderScreen(
@@ -806,14 +778,19 @@ class _FolderTabState extends State<FolderTab>
             folder: widget.folder,
             storage: widget.storage,
             onBack: widget.onBack,
-            onEntryTap: (entry) {
+            onEntryTap: (entries, index) {
               Navigator.of(context)
                   .push(
                     CupertinoPageRoute(
                       builder: (context) => EntryScreen(
-                        entry: entry,
+                        entries: entries,
+                        initialIndex: index,
                         folder: widget.folder,
                         storage: widget.storage,
+                        onEntryChanged: (entry) {
+                          widget.folderScreenKey.currentState
+                              ?.updateLastViewedEntry(entry.id);
+                        },
                       ),
                     ),
                   )
@@ -829,7 +806,6 @@ class _FolderTabState extends State<FolderTab>
   }
 }
 
-// --- HELPER CLASS ---
 class _FolderNavObserver extends NavigatorObserver {
   final Function(bool isAtRoot) onStackChanged;
 
@@ -838,19 +814,22 @@ class _FolderNavObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-    // When pushing (Entry Screen), we are leaving root.
-    // DISABLE PageView swipe immediately.
-    onStackChanged(false);
+    // FIX: Check if we actually pushed deep or if this is the initial route
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (navigator != null) {
+        // If canPop is true, we have a stack (Entry Screen).
+        // If false, we are at root (Folder Screen).
+        final isAtRoot = !navigator!.canPop();
+        onStackChanged(isAtRoot);
+      }
+    });
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    // When popping (Swipe back or back button), check if we returned to root.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (navigator != null) {
-        // If canPop is true, we are still deep in the stack.
-        // If canPop is false, we are at the Folder List (root).
         final isAtRoot = !navigator!.canPop();
         onStackChanged(isAtRoot);
       }

@@ -6,15 +6,20 @@ import '../storage_service.dart';
 import '../dialogs.dart';
 
 class EntryScreen extends StatefulWidget {
-  final AppEntry entry;
+  final List<AppEntry> entries;
+  final int initialIndex;
   final AppFolder folder;
   final StorageService storage;
+  // --- NEW: Callback for scroll events ---
+  final Function(AppEntry) onEntryChanged;
 
   const EntryScreen({
     super.key,
-    required this.entry,
+    required this.entries,
+    required this.initialIndex,
     required this.folder,
     required this.storage,
+    required this.onEntryChanged, // Required now
   });
 
   @override
@@ -22,20 +27,37 @@ class EntryScreen extends StatefulWidget {
 }
 
 class _EntryScreenState extends State<EntryScreen> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleKeys = widget.folder.visibleAttributes;
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
 
-    // --- NEW: Gesture Detector for Full-Screen Back Swipe ---
+    final currentEntry =
+        (widget.entries.isNotEmpty && _currentIndex < widget.entries.length)
+        ? widget.entries[_currentIndex]
+        : null;
+
     return GestureDetector(
-      // Allow horizontal drag to override other gestures if needed
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: (details) {
-        // Detect swipe direction and velocity
-        // primaryVelocity > 0 means swiping Right (Left-to-Right)
-        if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 200) {
           Navigator.of(context).pop();
         }
       },
@@ -45,80 +67,129 @@ class _EntryScreenState extends State<EntryScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           leading: const BackButton(color: Colors.black),
-          actions: [
-            IconButton(
-              icon: const Icon(
-                CupertinoIcons.ellipsis,
-                color: Colors.black,
-                size: 20,
-              ),
-              onPressed: () => showEditEntryDialog(
-                context,
-                widget.entry,
-                widget.folder,
-                widget.storage,
-                () {
-                  final all = widget.storage.getAllEntries();
-                  final exists = all.any((e) => e.id == widget.entry.id);
-
-                  if (!exists) {
-                    Navigator.of(context).pop();
-                  } else {
-                    setState(() {});
-                  }
-                },
-              ),
+          title: Text(
+            "${_currentIndex + 1} / ${widget.entries.length}",
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+              fontWeight: FontWeight.normal,
             ),
+          ),
+          centerTitle: true,
+          actions: [
+            if (currentEntry != null)
+              IconButton(
+                icon: const Icon(
+                  CupertinoIcons.ellipsis,
+                  color: Colors.black,
+                  size: 20,
+                ),
+                onPressed: () => showEditEntryDialog(
+                  context,
+                  currentEntry,
+                  widget.folder,
+                  widget.storage,
+                  () {
+                    final all = widget.storage.getAllEntries();
+                    final exists = all.any((e) => e.id == currentEntry.id);
+
+                    if (!exists) {
+                      setState(() {
+                        widget.entries.removeAt(_currentIndex);
+                        if (_currentIndex >= widget.entries.length) {
+                          _currentIndex = (widget.entries.length - 1).clamp(
+                            0,
+                            99999,
+                          );
+                        }
+                      });
+                      if (widget.entries.isEmpty) {
+                        Navigator.of(context).pop();
+                      }
+                    } else {
+                      setState(() {});
+                    }
+                  },
+                ),
+              ),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
             child: Container(color: Colors.grey.shade200, height: 1.0),
           ),
         ),
-        // --- HERO WRAPPER ---
-        body: Hero(
-          tag: 'entry_hero_${widget.entry.id}',
-          child: Material(
-            color: Colors.white,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
+
+        body: widget.entries.isEmpty
+            ? const Center(child: Text("No entries"))
+            : PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                  // --- NEW: Trigger the callback when entry changes ---
+                  if (index < widget.entries.length) {
+                    widget.onEntryChanged(widget.entries[index]);
+                  }
+                },
+                itemCount: widget.entries.length,
+                itemBuilder: (context, index) {
+                  final entry = widget.entries[index];
+
+                  return Hero(
+                    tag: 'entry_hero_${entry.id}',
+                    child: Material(
+                      color: Colors.white,
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ...visibleKeys.map((key) {
+                              final definition = registry[key];
+                              if (definition == null)
+                                return const SizedBox.shrink();
+
+                              final value = entry.getAttribute(key);
+                              final bool isEmpty =
+                                  value == null || value.toString().isEmpty;
+
+                              if (isEmpty &&
+                                  definition.type != AttributeValueType.image) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 24.0),
+                                child: _buildAttributeDisplay(
+                                  definition,
+                                  value,
+                                  widget.storage,
+                                ),
+                              );
+                            }).toList(),
+                            const SizedBox(height: 80),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...visibleKeys.map((key) {
-                    final definition = registry[key];
-                    if (definition == null) return const SizedBox.shrink();
-
-                    final value = widget.entry.getAttribute(key);
-                    final bool isEmpty =
-                        value == null || value.toString().isEmpty;
-
-                    if (isEmpty &&
-                        definition.type != AttributeValueType.image) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 24.0),
-                      child: _buildAttributeDisplay(definition, value),
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildAttributeDisplay(AttributeDefinition def, dynamic value) {
+  Widget _buildAttributeDisplay(
+    AttributeDefinition def,
+    dynamic value,
+    StorageService storage,
+  ) {
     if (def.type == AttributeValueType.image) {
       final bool hasUrl = value != null && value.toString().isNotEmpty;
-
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -129,7 +200,6 @@ class _EntryScreenState extends State<EntryScreen> {
                 ? Image.network(
                     value.toString(),
                     width: double.infinity,
-                    height: 250,
                     fit: BoxFit.cover,
                     errorBuilder: (c, e, s) => _buildPlaceholder(),
                   )
@@ -150,7 +220,7 @@ class _EntryScreenState extends State<EntryScreen> {
             spacing: 8,
             runSpacing: 8,
             children: tags.map((t) {
-              final color = widget.storage.getTagColor(t);
+              final color = storage.getTagColor(t);
               return Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
@@ -170,7 +240,6 @@ class _EntryScreenState extends State<EntryScreen> {
         ],
       );
     }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

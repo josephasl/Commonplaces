@@ -17,17 +17,17 @@ class EditTagsScreen extends StatefulWidget {
 // Public State class so we can access scrollToTop via GlobalKey
 class EditTagsScreenState extends State<EditTagsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController(); // NEW
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
 
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose(); // NEW
+    _scrollController.dispose();
     super.dispose();
   }
 
-  // --- NEW: Public method called by parent ---
+  // Public method called by parent
   void scrollToTop() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -46,6 +46,8 @@ class EditTagsScreenState extends State<EditTagsScreen> {
   @override
   Widget build(BuildContext context) {
     final categories = widget.storage.getTagCategories();
+    // Sort logic is handled by the list order in storage, which ReorderableListView updates
+
     final mapping = widget.storage.getTagMapping();
     final allTags = widget.storage.getGlobalTags();
 
@@ -62,230 +64,314 @@ class EditTagsScreenState extends State<EditTagsScreen> {
     for (var cat in categories) {
       grouped[cat.id] = [];
     }
+
+    // Add Uncategorized bucket if not present
+    if (!grouped.containsKey('default_grey_cat')) {
+      grouped['default_grey_cat'] = [];
+    }
+
     for (var tag in visibleTags) {
       final catId = mapping[tag] ?? 'default_grey_cat';
       if (grouped.containsKey(catId)) {
         grouped[catId]!.add(tag);
       } else {
-        if (!grouped.containsKey('default_grey_cat')) {
-          grouped['default_grey_cat'] = [];
-        }
+        // Fallback for tags pointing to deleted categories
         grouped['default_grey_cat']?.add(tag);
       }
     }
 
-    return Stack(
-      children: [
-        ReorderableListView.builder(
-          scrollController: _scrollController, // NEW: Attach controller
-          key: const PageStorageKey('edit_tags_list'),
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
-          itemCount: categories.length,
-          // ... [rest of ReorderableListView remains the same] ...
-          onReorder: (oldIndex, newIndex) async {
-            setState(() {
-              if (oldIndex < newIndex) newIndex -= 1;
-              final item = categories.removeAt(oldIndex);
-              categories.insert(newIndex, item);
-            });
-            await widget.storage.reorderTagCategories(
-              oldIndex,
-              newIndex < oldIndex ? newIndex : newIndex + 1,
-            );
-            widget.onUpdate?.call();
-          },
-          proxyDecorator: (child, index, animation) {
-            return Material(
-              elevation: 4,
-              color: Colors.white,
-              shadowColor: Colors.black26,
-              child: child,
-            );
-          },
-          itemBuilder: (context, index) {
-            final cat = categories[index];
-            final catTags = grouped[cat.id] ?? [];
+    // Identify the "Uncategorized" category object if it exists in the list,
+    // or handle it manually if it's implicit.
+    // The provided code assumes 'default_grey_cat' might be in 'categories' or handled implicitly.
+    // We will follow the loop logic: The ReorderableListView builds items based on 'categories'.
 
-            if (catTags.isEmpty && _searchQuery.isNotEmpty) {
-              return Container(key: ValueKey(cat.id));
-            }
+    return Container(
+      color: const Color(0xFFF2F2F7), // iOS Grouped Background
+      child: Stack(
+        children: [
+          ReorderableListView.builder(
+            scrollController: _scrollController,
+            key: const PageStorageKey('edit_tags_list'),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
+            itemCount: categories.length,
+            onReorder: (oldIndex, newIndex) async {
+              setState(() {
+                if (oldIndex < newIndex) newIndex -= 1;
+                final item = categories.removeAt(oldIndex);
+                categories.insert(newIndex, item);
+              });
+              await widget.storage.reorderTagCategories(
+                oldIndex,
+                newIndex < oldIndex ? newIndex : newIndex + 1,
+              );
+              widget.onUpdate?.call();
+            },
+            proxyDecorator: (child, index, animation) {
+              return Material(
+                elevation: 4,
+                color: Colors.transparent,
+                shadowColor: Colors.black26,
+                child:
+                    child, // The child is already the Container with decoration
+              );
+            },
+            itemBuilder: (context, index) {
+              final cat = categories[index];
+              final catTags = grouped[cat.id] ?? [];
 
-            return Container(
-              key: ValueKey(cat.id),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // --- CATEGORY HEADER ---
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    color: Colors.grey.shade50,
-                    child: Row(
-                      children: [
-                        ReorderableDragStartListener(
-                          index: index,
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 12),
-                            child: Icon(
-                              CupertinoIcons.bars,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          AppConstants.categoryIcons[cat.iconIndex],
-                          color: AppConstants.categoryColors[cat.colorIndex],
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          cat.name,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade800,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const Spacer(),
+              // Hide empty categories if searching
+              if (catTags.isEmpty && _searchQuery.isNotEmpty) {
+                return Container(key: ValueKey(cat.id));
+              }
 
-                        // --- UPDATED ACTIONS: Single Ellipsis Button ---
-                        if (cat.id != 'default_grey_cat')
-                          GestureDetector(
-                            onTap: () => showEditCategoryDialog(
-                              context,
-                              widget.storage,
-                              cat,
-                              _refresh,
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.transparent,
-                              ),
-                              child: const Icon(
-                                CupertinoIcons.ellipsis,
+              final isUncategorized = cat.id == 'default_grey_cat';
+
+              return Container(
+                key: ValueKey(cat.id),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- CATEGORY HEADER ---
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                      child: Row(
+                        children: [
+                          // Reorder Handle
+                          ReorderableDragStartListener(
+                            index: index,
+                            child: const Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: Icon(
+                                CupertinoIcons.bars,
+                                color: CupertinoColors.systemGrey3,
                                 size: 20,
-                                color: Colors.grey,
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, thickness: 1),
-
-                  // --- TAGS LIST ---
-                  if (catTags.isNotEmpty)
-                    Column(
-                      children: catTags
-                          .map(
-                            (tag) => ListTile(
-                              contentPadding: const EdgeInsets.only(
-                                left: 54,
-                                right: 16,
+                          // Category Icon
+                          Icon(
+                            AppConstants.categoryIcons[cat.iconIndex],
+                            color: AppConstants.categoryColors[cat.colorIndex],
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          // Category Name
+                          Expanded(
+                            child: Text(
+                              cat.name.toUpperCase(),
+                              style: const TextStyle(
+                                fontFamily: '.SF Pro Text',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: CupertinoColors.systemGrey,
+                                letterSpacing: -0.2,
                               ),
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                              title: Text("#$tag"),
-                              trailing: const Icon(
-                                CupertinoIcons.ellipsis,
-                                size: 16,
-                                color: Colors.grey,
-                              ),
-                              onTap: () => showTagOptionsDialog(
+                            ),
+                          ),
+                          // Edit Category Button
+                          if (!isUncategorized)
+                            GestureDetector(
+                              onTap: () => showEditCategoryDialog(
                                 context,
                                 widget.storage,
-                                tag,
+                                cat,
                                 _refresh,
                               ),
+                              child: const Text(
+                                "Edit",
+                                style: TextStyle(
+                                  fontFamily: '.SF Pro Text',
+                                  fontSize: 13,
+                                  color: CupertinoColors.activeBlue,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          )
-                          .toList(),
+                        ],
+                      ),
                     ),
-                ],
-              ),
-            );
-          },
-        ),
 
-        // ... [Floating Search + Add Tag code remains exactly the same] ...
-        Positioned(
-          bottom: 20,
-          left: 16,
-          right: 16,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                    // --- TAGS CONTAINER ---
+                    if (catTags.isEmpty)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "No tags in this category",
+                          style: TextStyle(
+                            fontFamily: '.SF Pro Text',
+                            color: Colors.grey.shade400,
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          children: List.generate(catTags.length, (tagIndex) {
+                            final tag = catTags[tagIndex];
+                            final isLast = tagIndex == catTags.length - 1;
+
+                            return Column(
+                              children: [
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => showTagOptionsDialog(
+                                      context,
+                                      widget.storage,
+                                      tag,
+                                      _refresh,
+                                    ),
+                                    borderRadius: isLast
+                                        ? const BorderRadius.vertical(
+                                            bottom: Radius.circular(10),
+                                          )
+                                        : (tagIndex == 0
+                                              ? const BorderRadius.vertical(
+                                                  top: Radius.circular(10),
+                                                )
+                                              : BorderRadius.zero),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            "#$tag",
+                                            style: const TextStyle(
+                                              fontFamily: '.SF Pro Text',
+                                              fontSize: 16,
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.normal,
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          const Icon(
+                                            CupertinoIcons.right_chevron,
+                                            size: 14,
+                                            color: CupertinoColors.systemGrey3,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (!isLast)
+                                  const Divider(
+                                    height: 1,
+                                    thickness: 1,
+                                    indent: 16,
+                                    color: Color(0xFFF0F0F0),
+                                  ),
+                              ],
+                            );
+                          }),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: "Search tags...",
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(
-                        CupertinoIcons.search,
-                        color: Colors.black54,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close, color: Colors.grey),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                    ),
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () =>
-                    showAddTagDialog(context, widget.storage, _refresh),
-                child: Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white),
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        ),
-      ],
+
+          // --- FLOATING SEARCH & ADD BUTTON ---
+          Positioned(
+            bottom: 20,
+            left: 16,
+            right: 16,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: "Filter stamps...",
+                        hintStyle: const TextStyle(
+                          color: Colors.grey,
+                          fontFamily: '.SF Pro Text',
+                        ),
+                        prefixIcon: const Icon(
+                          CupertinoIcons.search,
+                          color: Colors.black54,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        suffixIcon: _searchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _searchQuery = '');
+                                },
+                              )
+                            : null,
+                      ),
+                      style: const TextStyle(fontFamily: '.SF Pro Text'),
+                      onChanged: (val) => setState(() => _searchQuery = val),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () =>
+                      showAddTagDialog(context, widget.storage, _refresh),
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

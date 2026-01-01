@@ -7,7 +7,261 @@ import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 
-// --- CATEGORY DIALOGS ---
+// --- PUBLIC WRAPPERS ---
+
+// Returns Future<String?> so caller can detect the new tag
+Future<String?> showAddTagDialog(
+  BuildContext context,
+  StorageService storage,
+  VoidCallback onUpdate,
+) {
+  return _showTagDialog(
+    context: context,
+    storage: storage,
+    onUpdate: onUpdate,
+    tagToEdit: null,
+  );
+}
+
+Future<void> showTagOptionsDialog(
+  BuildContext context,
+  StorageService storage,
+  String tag,
+  VoidCallback onUpdate,
+) {
+  return _showTagDialog(
+    context: context,
+    storage: storage,
+    onUpdate: onUpdate,
+    tagToEdit: tag,
+  );
+}
+
+// --- UNIFIED TAG DIALOG IMPLEMENTATION ---
+
+Future<String?> _showTagDialog({
+  required BuildContext context,
+  required StorageService storage,
+  required VoidCallback onUpdate,
+  String? tagToEdit,
+}) {
+  final bool isEditMode = tagToEdit != null;
+  final controller = TextEditingController(text: isEditMode ? tagToEdit : '');
+
+  // Pre-fetch category if editing
+  String? selectedCategoryId;
+  if (isEditMode) {
+    // Assuming you have a way to get the category ID for a tag.
+    // If not, it defaults to null (Uncategorized) or you might need a helper method.
+    // For now, we'll try to find it from the mapping.
+    final mapping = storage.getTagMapping();
+    selectedCategoryId = mapping[tagToEdit];
+  }
+
+  return showCupertinoModalPopup<String>(
+    context: context,
+    builder: (ctx) {
+      final categories = storage.getTagCategories();
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          Future<void> saveAndClose() async {
+            if (controller.text.isNotEmpty) {
+              final newName = controller.text;
+
+              if (isEditMode) {
+                // Handle Rename if changed
+                if (newName != tagToEdit) {
+                  await storage.renameGlobalTag(tagToEdit!, newName);
+                }
+                // Handle Category Move
+                if (selectedCategoryId != null) {
+                  await storage.setTagCategory(newName, selectedCategoryId!);
+                } else {
+                  // If "None" selected, we might want to clear it (depends on implementation)
+                  // await storage.setTagCategory(newName, null); // If your backend supports clearing
+                }
+              } else {
+                // Add New
+                await storage.addGlobalTag(newName);
+                if (selectedCategoryId != null) {
+                  await storage.setTagCategory(newName, selectedCategoryId!);
+                }
+              }
+
+              onUpdate();
+              if (ctx.mounted) Navigator.pop(ctx, newName);
+            }
+          }
+
+          return BaseBottomSheet(
+            title: isEditMode ? "Edit Stamp" : "New Stamp",
+            onSave: saveAndClose,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Stamp Name",
+                  style: TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CupertinoTextField(
+                  controller: controller,
+                  placeholder: "Enter name",
+                  padding: const EdgeInsets.all(12),
+                  autofocus: !isEditMode, // Only autofocus on add
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey6,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  style: const TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontSize: 16,
+                    color: Colors.black,
+                  ),
+                  onSubmitted: (_) => saveAndClose(),
+                ),
+
+                const SizedBox(height: 24),
+                const Text(
+                  "Group",
+                  style: TextStyle(
+                    fontFamily: '.SF Pro Text',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // --- Category Selection ---
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      // "None" Option
+                      GestureDetector(
+                        onTap: () => setState(() => selectedCategoryId = null),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selectedCategoryId == null
+                                ? CupertinoColors.systemGrey4
+                                : CupertinoColors.systemGrey6,
+                            borderRadius: BorderRadius.circular(12),
+                            border: selectedCategoryId == null
+                                ? Border.all(color: Colors.black54, width: 1.5)
+                                : null,
+                          ),
+                          child: Text(
+                            "None",
+                            style: TextStyle(
+                              fontFamily: '.SF Pro Text',
+                              fontSize: 14,
+                              color: selectedCategoryId == null
+                                  ? Colors.black
+                                  : Colors.black54,
+                              fontWeight: selectedCategoryId == null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Available Categories
+                      ...categories.map((cat) {
+                        final isSelected = selectedCategoryId == cat.id;
+                        final catColor =
+                            AppConstants.categoryColors[cat.colorIndex];
+
+                        return GestureDetector(
+                          onTap: () =>
+                              setState(() => selectedCategoryId = cat.id),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? catColor.withOpacity(0.2)
+                                  : CupertinoColors.systemGrey6,
+                              borderRadius: BorderRadius.circular(12),
+                              border: isSelected
+                                  ? Border.all(color: catColor, width: 1.5)
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  AppConstants.categoryIcons[cat.iconIndex],
+                                  size: 16,
+                                  color: isSelected ? catColor : Colors.black54,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  cat.name,
+                                  style: TextStyle(
+                                    fontFamily: '.SF Pro Text',
+                                    fontSize: 14,
+                                    color: isSelected
+                                        ? Colors.black
+                                        : Colors.black87,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+
+                // --- DELETE BUTTON (Edit Mode Only) ---
+                if (isEditMode) ...[
+                  const SizedBox(height: 32),
+                  DeleteTriggerButton(
+                    label: "Delete Tag",
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      showDeleteConfirmationDialog(
+                        context: context,
+                        title: "Delete Tag?",
+                        message: "Delete #$tagToEdit?",
+                        subtitle: "It will be removed from all entries.",
+                        onConfirm: () async {
+                          await storage.removeGlobalTag(tagToEdit!);
+                          onUpdate();
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+// --- CATEGORY DIALOGS (Keep these as they were, but updated font styles slightly to match) ---
 
 Future<void> showAddCategoryDialog(
   BuildContext context,
@@ -23,7 +277,7 @@ Future<void> showAddCategoryDialog(
     builder: (ctx) => StatefulBuilder(
       builder: (context, setState) {
         return BaseBottomSheet(
-          title: "New Category",
+          title: "New Stamp Group",
           onSave: () async {
             if (nameController.text.isNotEmpty) {
               final newCat = TagCategory(
@@ -41,20 +295,37 @@ Future<void> showAddCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                "Group name",
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
               CupertinoTextField(
                 controller: nameController,
-                placeholder: "Category Name",
+                placeholder: "Enter group name",
                 padding: const EdgeInsets.all(12),
                 autofocus: true,
                 decoration: BoxDecoration(
                   color: CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(8),
                 ),
+                style: const TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
                 "Color",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 12),
               _buildColorPicker(
@@ -64,7 +335,11 @@ Future<void> showAddCategoryDialog(
               const SizedBox(height: 24),
               const Text(
                 "Icon",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 12),
               _buildIconPicker(
@@ -114,19 +389,36 @@ Future<void> showEditCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                "Category Name",
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
               CupertinoTextField(
                 controller: nameController,
-                placeholder: "Category Name",
+                placeholder: "Enter category name",
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: CupertinoColors.systemGrey6,
                   borderRadius: BorderRadius.circular(8),
                 ),
+                style: const TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontSize: 16,
+                ),
               ),
               const SizedBox(height: 24),
               const Text(
                 "Color",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 12),
               _buildColorPicker(
@@ -136,7 +428,11 @@ Future<void> showEditCategoryDialog(
               const SizedBox(height: 24),
               const Text(
                 "Icon",
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontFamily: '.SF Pro Text',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 12),
               _buildIconPicker(
@@ -144,8 +440,7 @@ Future<void> showEditCategoryDialog(
                 (i) => setState(() => selectedIconIndex = i),
               ),
 
-              // --- UNIFIED DELETE BUTTON ---
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               DeleteTriggerButton(
                 label: "Delete Category",
                 onPressed: () {
@@ -166,205 +461,6 @@ Future<void> showEditCategoryDialog(
           ),
         );
       },
-    ),
-  );
-}
-
-// --- TAG DIALOGS ---
-
-// Returns Future<String?> so caller can detect the new tag
-Future<String?> showAddTagDialog(
-  BuildContext context,
-  StorageService storage,
-  VoidCallback onUpdate,
-) {
-  final controller = TextEditingController();
-  return showCupertinoModalPopup<String>(
-    context: context,
-    builder: (ctx) => BaseBottomSheet(
-      title: "New Tag",
-      onSave: () async {
-        if (controller.text.isNotEmpty) {
-          await storage.addGlobalTag(controller.text);
-          onUpdate();
-          if (ctx.mounted) Navigator.pop(ctx, controller.text);
-        }
-      },
-      child: CupertinoTextField(
-        controller: controller,
-        placeholder: "Tag Name",
-        padding: const EdgeInsets.all(12),
-        autofocus: true,
-        decoration: BoxDecoration(
-          color: CupertinoColors.systemGrey6,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        onSubmitted: (_) async {
-          if (controller.text.isNotEmpty) {
-            await storage.addGlobalTag(controller.text);
-            onUpdate();
-            if (ctx.mounted) Navigator.pop(ctx, controller.text);
-          }
-        },
-      ),
-    ),
-  );
-}
-
-Future<void> showTagOptionsDialog(
-  BuildContext context,
-  StorageService storage,
-  String tag,
-  VoidCallback onUpdate,
-) {
-  final controller = TextEditingController(text: tag);
-
-  return showCupertinoModalPopup(
-    context: context,
-    builder: (ctx) => BaseBottomSheet(
-      title: "Edit Tag",
-      onSave: () async {
-        if (controller.text.isNotEmpty && controller.text != tag) {
-          await storage.renameGlobalTag(tag, controller.text);
-          onUpdate();
-        }
-        if (ctx.mounted) Navigator.pop(ctx);
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Rename Field
-          CupertinoTextField(
-            controller: controller,
-            placeholder: "Tag Name",
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            onSubmitted: (_) async {
-              if (controller.text.isNotEmpty && controller.text != tag) {
-                await storage.renameGlobalTag(tag, controller.text);
-                onUpdate();
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-          ),
-
-          const SizedBox(height: 24),
-          const Divider(height: 1),
-
-          // 2. Move to Category (Button style to match Delete)
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              color: CupertinoColors.activeBlue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              onPressed: () {
-                Navigator.pop(ctx);
-                showMoveTagDialog(context, storage, tag, onUpdate);
-              },
-              child: const Text(
-                "Move to Category",
-                style: TextStyle(
-                  color: CupertinoColors.activeBlue,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // 3. Unified Delete Button
-          DeleteTriggerButton(
-            label: "Delete Tag",
-            onPressed: () {
-              Navigator.pop(ctx);
-              showDeleteConfirmationDialog(
-                context: context,
-                title: "Delete Tag?",
-                message: "Delete #$tag?",
-                subtitle: "It will be removed from all entries.",
-                onConfirm: () async {
-                  await storage.removeGlobalTag(tag);
-                  onUpdate();
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-Future<void> showMoveTagDialog(
-  BuildContext context,
-  StorageService storage,
-  String tag,
-  VoidCallback onUpdate,
-) {
-  final categories = storage.getTagCategories();
-  return showCupertinoModalPopup(
-    context: context,
-    builder: (ctx) => BaseBottomSheet(
-      title: "Move Tag",
-      hideSave: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Text(
-              "Select a category for '#$tag'",
-              style: const TextStyle(color: Colors.grey),
-            ),
-          ),
-          ...categories.map((cat) {
-            return GestureDetector(
-              onTap: () async {
-                await storage.setTagCategory(tag, cat.id);
-                onUpdate();
-                Navigator.pop(ctx);
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      AppConstants.categoryIcons[cat.iconIndex],
-                      color: AppConstants.categoryColors[cat.colorIndex],
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      cat.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Spacer(),
-                    const Icon(
-                      CupertinoIcons.right_chevron,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
     ),
   );
 }

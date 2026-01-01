@@ -6,6 +6,9 @@ import '../models.dart';
 import '../dialogs.dart';
 import 'edit_tags_screen.dart';
 
+// --- NEW: Sort Options Enum ---
+enum AttributeSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
+
 class ManageLibraryScreen extends StatefulWidget {
   final StorageService storage;
   final VoidCallback? onUpdate;
@@ -50,7 +53,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
     super.dispose();
   }
 
-  // --- NEW: Handle Nav Bar Tap ---
+  // Handle Nav Bar Tap
   void handleNavTap() {
     if (_tabController.index == 0) {
       // Tab 0: Edit Tags -> Call child's method via Key
@@ -86,6 +89,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
             color: Colors.black,
             fontWeight: FontWeight.w600,
             fontSize: 17,
+            fontFamily: '.SF Pro Text',
           ),
         ),
         actions: [
@@ -138,6 +142,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
                   labelStyle: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
+                    fontFamily: '.SF Pro Text',
                   ),
                   tabs: const [
                     Tab(text: "Group Tags"),
@@ -153,14 +158,14 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
         controller: _tabController,
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          // TAB 1: Pass the key here
+          // TAB 1: Edit Tags
           EditTagsScreen(
             key: _editTagsKey,
             storage: widget.storage,
             onUpdate: widget.onUpdate,
           ),
 
-          // TAB 2: Pass the controller here
+          // TAB 2: Attributes Manager
           _AttributesManager(
             storage: widget.storage,
             onUpdate: widget.onUpdate,
@@ -175,7 +180,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
 class _AttributesManager extends StatefulWidget {
   final StorageService storage;
   final VoidCallback? onUpdate;
-  final ScrollController scrollController; // Receive controller
+  final ScrollController scrollController;
 
   const _AttributesManager({
     required this.storage,
@@ -188,109 +193,308 @@ class _AttributesManager extends StatefulWidget {
 }
 
 class _AttributesManagerState extends State<_AttributesManager> {
+  // --- NEW: Sort State ---
+  AttributeSortOption _currentSort = AttributeSortOption.dateNewest;
+
   void _refresh() {
     setState(() {});
     widget.onUpdate?.call();
+  }
+
+  // --- NEW: Helper to extract timestamp from key (label_timestamp) ---
+  int _getTimestamp(String key) {
+    try {
+      final parts = key.split('_');
+      if (parts.length > 1) {
+        return int.parse(parts.last);
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  // --- NEW: Sort Sheet Dialog ---
+  void _showSortSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text("Sort Attributes By"),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _currentSort = AttributeSortOption.nameAsc);
+              Navigator.pop(ctx);
+            },
+            child: const Text("Name (A-Z)"),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _currentSort = AttributeSortOption.nameDesc);
+              Navigator.pop(ctx);
+            },
+            child: const Text("Name (Z-A)"),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _currentSort = AttributeSortOption.dateNewest);
+              Navigator.pop(ctx);
+            },
+            child: const Text("Date Created (Newest)"),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () {
+              setState(() => _currentSort = AttributeSortOption.dateOldest);
+              Navigator.pop(ctx);
+            },
+            child: const Text("Date Created (Oldest)"),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel"),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final customAttrs = widget.storage.getCustomAttributes();
 
-    return Stack(
-      children: [
-        customAttrs.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      CupertinoIcons.slider_horizontal_3,
-                      size: 60,
-                      color: Colors.grey.shade300,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      "No custom attributes",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Add fields like 'Author' or 'Pages'",
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+    // --- NEW: Apply Sorting ---
+    customAttrs.sort((a, b) {
+      switch (_currentSort) {
+        case AttributeSortOption.nameAsc:
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+        case AttributeSortOption.nameDesc:
+          return b.label.toLowerCase().compareTo(a.label.toLowerCase());
+        case AttributeSortOption.dateNewest:
+          return _getTimestamp(b.key).compareTo(_getTimestamp(a.key));
+        case AttributeSortOption.dateOldest:
+          return _getTimestamp(a.key).compareTo(_getTimestamp(b.key));
+      }
+    });
+
+    return Container(
+      color: const Color(0xFFF2F2F7), // iOS Grouped Background
+      child: Stack(
+        children: [
+          ListView(
+            controller: widget.scrollController,
+            key: const PageStorageKey('attributes_list'),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
+            children: [
+              // --- HEADER ---
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                child: Row(
+                  children: const [
+                    SizedBox(width: 8),
+                    Text(
+                      "Custom Attributes",
+                      style: TextStyle(
+                        fontFamily: '.SF Pro Text',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: CupertinoColors.systemGrey,
+                        letterSpacing: -0.2,
+                      ),
                     ),
                   ],
                 ),
-              )
-            : ListView.separated(
-                controller: widget.scrollController, // Attach controller
-                key: const PageStorageKey('attributes_list'),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                itemCount: customAttrs.length,
-                separatorBuilder: (c, i) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final attr = customAttrs[index];
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      title: Text(
-                        attr.label,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text("Type: ${attr.type.name.toUpperCase()}"),
-                      trailing: IconButton(
-                        icon: const Icon(
-                          CupertinoIcons.ellipsis,
-                          size: 18,
-                          color: Colors.grey,
-                        ),
-                        onPressed: () {
-                          showAttributeOptionsDialog(
-                            context,
-                            widget.storage,
-                            attr,
-                            _refresh,
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
               ),
 
-        Positioned(
-          bottom: 20,
-          right: 16,
-          child: GestureDetector(
-            onTap: () =>
-                showAddAttributeDialog(context, widget.storage, _refresh),
-            child: Container(
-              height: 50,
-              width: 50,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+              // --- LIST CONTAINER ---
+              if (customAttrs.isEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ],
-              ),
-              child: const Icon(Icons.add, color: Colors.white),
+                  child: Column(
+                    children: [
+                      Icon(
+                        CupertinoIcons.slider_horizontal_3,
+                        size: 40,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "No custom attributes",
+                        style: TextStyle(
+                          fontFamily: '.SF Pro Text',
+                          color: Colors.grey,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        "Add fields like 'Author' or 'Pages'",
+                        style: TextStyle(
+                          fontFamily: '.SF Pro Text',
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: List.generate(customAttrs.length, (index) {
+                      final attr = customAttrs[index];
+                      final isLast = index == customAttrs.length - 1;
+
+                      return Column(
+                        children: [
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                showAttributeOptionsDialog(
+                                  context,
+                                  widget.storage,
+                                  attr,
+                                  _refresh,
+                                );
+                              },
+                              borderRadius: isLast
+                                  ? const BorderRadius.vertical(
+                                      bottom: Radius.circular(10),
+                                    )
+                                  : (index == 0
+                                        ? const BorderRadius.vertical(
+                                            top: Radius.circular(10),
+                                          )
+                                        : BorderRadius.zero),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            attr.label,
+                                            style: const TextStyle(
+                                              fontFamily: '.SF Pro Text',
+                                              fontSize: 16,
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.normal,
+                                              letterSpacing: -0.3,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            attr.type.name.toUpperCase(),
+                                            style: const TextStyle(
+                                              fontFamily: '.SF Pro Text',
+                                              fontSize: 11,
+                                              color: CupertinoColors.systemGrey,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      CupertinoIcons.right_chevron,
+                                      size: 14,
+                                      color: CupertinoColors.systemGrey3,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          if (!isLast)
+                            const Divider(
+                              height: 1,
+                              thickness: 1,
+                              indent: 16,
+                              color: Color(0xFFF0F0F0),
+                            ),
+                        ],
+                      );
+                    }),
+                  ),
+                ),
+            ],
+          ),
+
+          // --- FLOATING ACTION BUTTONS (Sort + Add) ---
+          Positioned(
+            bottom: 20,
+            right: 16,
+            child: Row(
+              mainAxisSize: MainAxisSize.min, // Keep tight
+              children: [
+                // 1. Sort Button
+                GestureDetector(
+                  onTap: _showSortSheet,
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.sort_down,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // 2. Add Button
+                GestureDetector(
+                  onTap: () =>
+                      showAddAttributeDialog(context, widget.storage, _refresh),
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
