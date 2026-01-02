@@ -131,7 +131,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
                   unselectedLabelColor: AppColors.textSecondary,
                   labelStyle: AppTextStyles.subHeader,
                   tabs: const [
-                    Tab(text: "Stamp Groups"),
+                    Tab(text: "Stamps"),
                     Tab(text: "Attributes"),
                   ],
                 ),
