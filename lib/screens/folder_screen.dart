@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import '../models.dart';
-import '../storage_service.dart';
+import '../../models.dart';
+import '../../storage_service.dart';
 import '../cards.dart';
 import '../dialogs.dart';
-import '../attributes.dart';
+import '../../attributes.dart';
+import '../ui/app_styles.dart';
+import 'entry_screen.dart';
+import '../ui/dialogs/sort_bottom_sheet.dart';
+import '../shakeable.dart';
 
 class FolderScreen extends StatefulWidget {
   final AppFolder folder;
@@ -28,22 +32,22 @@ class FolderScreen extends StatefulWidget {
 class FolderScreenState extends State<FolderScreen> {
   List<AppEntry> _allFolderEntries = [];
   Set<String> _activeTags = {};
-
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ScrollController _tagScrollController = ScrollController();
-
   String _searchQuery = '';
-
-  // --- SORTING STATE ---
-  String _sortAttributeKey = 'dateCreated';
-  bool _isAscending = false;
-
+  late String _sortAttributeKey;
+  late bool _isAscending;
   String? _lastViewedEntryId;
   Offset _dragStart = Offset.zero;
+  bool _isEditing = false;
 
   void updateLastViewedEntry(String id) {
     _lastViewedEntryId = id;
+  }
+
+  void stopEditing() {
+    if (_isEditing) setState(() => _isEditing = false);
   }
 
   @override
@@ -52,11 +56,15 @@ class FolderScreenState extends State<FolderScreen> {
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
     }
-    // Check ACTIVE attributes for sorting
-    if (!widget.folder.activeAttributes.contains('dateCreated') &&
+
+    // --- LOAD SAVED SORT PREFS ---
+    _sortAttributeKey = widget.folder.sortKey;
+    _isAscending = widget.folder.sortAscending;
+
+    if (!widget.folder.activeAttributes.contains(_sortAttributeKey) &&
+        _sortAttributeKey != 'dateCreated' &&
         widget.folder.activeAttributes.isNotEmpty) {
       _sortAttributeKey = widget.folder.activeAttributes.first;
-      _isAscending = true;
     }
     refresh();
   }
@@ -79,9 +87,7 @@ class FolderScreenState extends State<FolderScreen> {
       );
     } else if (widget.folder.id != 'untagged_special_id') {
       if (_activeTags.length < widget.folder.displayTags.length) {
-        setState(() {
-          _activeTags = Set.from(widget.folder.displayTags);
-        });
+        setState(() => _activeTags = Set.from(widget.folder.displayTags));
       }
       if (_tagScrollController.hasClients && _tagScrollController.offset > 0) {
         _tagScrollController.animateTo(
@@ -100,7 +106,6 @@ class FolderScreenState extends State<FolderScreen> {
     } else {
       entries = widget.storage.getEntriesForFolder(widget.folder);
     }
-
     if (mounted) {
       setState(() {
         _allFolderEntries = entries;
@@ -117,91 +122,58 @@ class FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  // --- REFACTORED SORT LOGIC (Async Pattern) ---
   Future<void> _showSortSheet() async {
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
 
-    // Use ACTIVE attributes for sorting
-    final List<String> sortableKeys = List.from(widget.folder.activeAttributes);
-
-    // 1. AWAIT the user's selection
-    final String? selectedKey = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text("Sort Entries By"),
-        message: const Text("Tap again to toggle order"),
-        actions: sortableKeys.map((key) {
+    final List<SortOptionItem> options = widget.folder.activeAttributes
+        .map((key) {
           final def = registry[key];
-          if (def == null) return Container();
+          if (def == null) return null;
+          return SortOptionItem(key, def.label);
+        })
+        .whereType<SortOptionItem>()
+        .toList();
 
-          final isSelected = _sortAttributeKey == key;
-          String label = def.label;
+    if (options.isEmpty) return;
 
-          IconData? icon;
-          if (isSelected) {
-            icon = _isAscending
-                ? CupertinoIcons.arrow_up
-                : CupertinoIcons.arrow_down;
-          }
-
-          return CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.of(ctx).pop(key);
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(label),
-                if (isSelected) ...[
-                  const SizedBox(width: 8),
-                  Icon(icon, size: 16, color: CupertinoColors.activeBlue),
-                ],
-              ],
-            ),
-          );
-        }).toList(),
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(ctx).pop(null),
-          child: const Text("Cancel"),
-        ),
-      ),
+    final result = await showUnifiedSortSheet(
+      context: context,
+      title: "Sort Entries By",
+      options: options,
+      currentSortKey: _sortAttributeKey,
+      currentIsAscending: _isAscending,
     );
 
-    // 3. If nothing selected or widget closed, stop
-    if (selectedKey == null || !mounted) return;
+    if (result != null && mounted) {
+      setState(() {
+        _sortAttributeKey = result.key;
+        _isAscending = result.isAscending;
+      });
 
-    // 4. Update State safely AFTER dialog is closed
-    setState(() {
-      final def = registry[selectedKey];
-
-      if (_sortAttributeKey == selectedKey) {
-        // Same key = Toggle direction
-        _isAscending = !_isAscending;
-      } else {
-        // New key = Select key
-        _sortAttributeKey = selectedKey;
-
-        // Set Default Direction based on Type
-        if (def?.type == AttributeValueType.date ||
-            def?.type == AttributeValueType.number ||
-            def?.type == AttributeValueType.rating ||
-            def?.type == AttributeValueType.image) {
-          _isAscending = false;
-        } else {
-          _isAscending = true;
-        }
+      if (widget.folder.id != 'untagged_special_id') {
+        widget.folder.setSortPreferences(_sortAttributeKey, _isAscending);
+        await widget.storage.saveFolder(widget.folder);
       }
-    });
+    }
   }
 
   void _openLastViewedEntry(List<AppEntry> currentList) {
     if (_lastViewedEntryId == null) return;
     final index = currentList.indexWhere((e) => e.id == _lastViewedEntryId);
-    if (index != -1) {
-      widget.onEntryTap(currentList, index);
-    }
+    if (index != -1) widget.onEntryTap(currentList, index);
+  }
+
+  void _deleteEntry(AppEntry entry) {
+    showDeleteConfirmationDialog(
+      context: context,
+      title: "Delete Entry?",
+      message: "Delete this entry?",
+      onConfirm: () async {
+        await widget.storage.deleteEntry(entry.id);
+        refresh();
+      },
+    );
   }
 
   @override
@@ -216,13 +188,11 @@ class FolderScreenState extends State<FolderScreen> {
       processedEntries = _allFolderEntries.where((entry) {
         final rawTag = entry.getAttribute('tag');
         if (rawTag == null) return false;
-
         List<String> entryTags = [];
         if (rawTag is String)
           entryTags = [rawTag];
         else if (rawTag is List)
           entryTags = List<String>.from(rawTag);
-
         if (_activeTags.isEmpty) return false;
         return entryTags.any((t) => _activeTags.contains(t));
       }).toList();
@@ -230,21 +200,16 @@ class FolderScreenState extends State<FolderScreen> {
 
     if (_searchQuery.isNotEmpty) {
       processedEntries = processedEntries.where((entry) {
-        final title = (entry.getAttribute('title') ?? '').toString();
         final searchStr = entry.attributes.values.join(' ').toLowerCase();
         return searchStr.contains(_searchQuery.toLowerCase());
       }).toList();
     }
 
-    // --- SORT IMPLEMENTATION ---
     processedEntries.sort((a, b) {
       final def = registry[_sortAttributeKey];
-
       dynamic valA = a.getAttribute(_sortAttributeKey);
       dynamic valB = b.getAttribute(_sortAttributeKey);
-
       int result = 0;
-
       if (valA == null && valB == null) return 0;
       if (valA == null) return _isAscending ? -1 : 1;
       if (valB == null) return _isAscending ? 1 : -1;
@@ -267,35 +232,28 @@ class FolderScreenState extends State<FolderScreen> {
           valB.toString().toLowerCase(),
         );
       }
-
       return _isAscending ? result : -result;
     });
 
-    // Use VISIBLE attributes for the Card Preview
     final visibleAttrs = widget.folder.visibleAttributes;
 
     return Listener(
-      onPointerDown: (event) {
-        _dragStart = event.position;
-      },
+      onPointerDown: (event) => _dragStart = event.position,
       onPointerUp: (event) {
         final delta = event.position - _dragStart;
-        if (delta.dx < -50 && delta.dy.abs() < 50) {
+        if (delta.dx < -50 && delta.dy.abs() < 50)
           _openLastViewedEntry(processedEntries);
-        }
       },
       child: Scaffold(
         backgroundColor: Colors.white,
+
         appBar: AppBar(
           title: Text(
             widget.folder.getAttribute<String>('title') ?? "Folder",
-            style: const TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.w600,
-              fontSize: 17,
-            ),
+            style: AppTextStyles.header,
           ),
           backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
           elevation: 0,
           centerTitle: true,
           bottom: PreferredSize(
@@ -303,7 +261,16 @@ class FolderScreenState extends State<FolderScreen> {
             child: Container(color: Colors.grey.shade200, height: 1.0),
           ),
           actions: [
-            if (widget.folder.id != 'untagged_special_id')
+            if (_isEditing)
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: const Text(
+                  "Done",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                onPressed: () => setState(() => _isEditing = false),
+              )
+            else if (widget.folder.id != 'untagged_special_id')
               IconButton(
                 icon: const Icon(
                   CupertinoIcons.ellipsis,
@@ -324,11 +291,8 @@ class FolderScreenState extends State<FolderScreen> {
                   final addedTags = currentTags.where(
                     (t) => !previousTags.contains(t),
                   );
-                  if (addedTags.isNotEmpty && mounted) {
-                    setState(() {
-                      _activeTags.addAll(addedTags);
-                    });
-                  }
+                  if (addedTags.isNotEmpty && mounted)
+                    setState(() => _activeTags.addAll(addedTags));
                 },
               ),
           ],
@@ -339,8 +303,8 @@ class FolderScreenState extends State<FolderScreen> {
               children: [
                 if (widget.folder.displayTags.isNotEmpty)
                   Container(
-                    height: 50,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    height: 62,
+                    padding: const EdgeInsets.only(top: 12, bottom: 12),
                     child: ListView.separated(
                       controller: _tagScrollController,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -351,16 +315,14 @@ class FolderScreenState extends State<FolderScreen> {
                         final tag = widget.folder.displayTags[index];
                         final isActive = _activeTags.contains(tag);
                         final catColor = widget.storage.getTagColor(tag);
-
                         return GestureDetector(
                           onTap: () {
                             if (!mounted) return;
-                            setState(() {
-                              if (isActive)
-                                _activeTags.remove(tag);
-                              else
-                                _activeTags.add(tag);
-                            });
+                            setState(
+                              () => isActive
+                                  ? _activeTags.remove(tag)
+                                  : _activeTags.add(tag),
+                            );
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
@@ -372,7 +334,7 @@ class FolderScreenState extends State<FolderScreen> {
                               color: isActive
                                   ? catColor.withOpacity(0.2)
                                   : const Color(0xFFF2F2F7),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(24),
                               border: isActive
                                   ? Border.all(color: catColor)
                                   : null,
@@ -393,59 +355,104 @@ class FolderScreenState extends State<FolderScreen> {
                       },
                     ),
                   ),
-
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
-                    child: processedEntries.isEmpty
-                        ? const Center(
-                            child: Text(
-                              "No entries found",
-                              style: TextStyle(
-                                color: CupertinoColors.systemGrey,
-                              ),
-                            ),
-                          )
-                        : MasonryGridView.count(
-                            controller: _scrollController,
-                            key: PageStorageKey(
-                              'folder_grid_${widget.folder.id}',
-                            ),
-                            physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
-                            ),
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            itemCount: processedEntries.length,
-                            itemBuilder: (context, index) {
-                              final entry = processedEntries[index];
-                              return GestureDetector(
-                                onTap: () {
-                                  updateLastViewedEntry(entry.id);
-                                  widget.onEntryTap(processedEntries, index);
-                                },
-                                child: Hero(
-                                  tag: 'entry_hero_${entry.id}',
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: EntryCard(
-                                      entry: entry,
-                                      visibleAttributes: visibleAttrs,
-                                      tagColorResolver:
-                                          widget.storage.getTagColor,
-                                      registry: registry,
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_isEditing) setState(() => _isEditing = false);
+                    },
+                    child: Padding(
+                      // Only padding left/right here.
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: MasonryGridView.count(
+                        controller: _scrollController,
+                        key: PageStorageKey('folder_grid_${widget.folder.id}'),
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        // Bottom padding here allows scrolling BEHIND floating elements
+                        padding: const EdgeInsets.only(bottom: 100),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 0,
+                        crossAxisSpacing: 0,
+                        itemCount: processedEntries.length,
+                        itemBuilder: (context, index) {
+                          final entry = processedEntries[index];
+
+                          return GestureDetector(
+                            onLongPress: () =>
+                                setState(() => _isEditing = true),
+                            onTap: () {
+                              if (_isEditing) {
+                                setState(() => _isEditing = false);
+                              } else {
+                                updateLastViewedEntry(entry.id);
+                                widget.onEntryTap(processedEntries, index);
+                              }
+                            },
+                            child: Shakeable(
+                              enabled: _isEditing,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(5.0),
+                                    child: Hero(
+                                      tag: 'entry_hero_${entry.id}',
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: EntryCard(
+                                          entry: entry,
+                                          visibleAttributes: visibleAttrs,
+                                          tagColorResolver:
+                                              widget.storage.getTagColor,
+                                          registry: registry,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                  if (_isEditing)
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: GestureDetector(
+                                        onTap: () => _deleteEntry(entry),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF8E8E93),
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.1,
+                                                ),
+                                                blurRadius: 4,
+                                              ),
+                                            ],
+                                          ),
+                                          padding: const EdgeInsets.all(6),
+                                          child: const Icon(
+                                            CupertinoIcons.xmark,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-
             Positioned(
               bottom: 20,
               left: 16,
@@ -534,7 +541,6 @@ class FolderScreenState extends State<FolderScreen> {
                         widget.storage,
                         refresh,
                         prefillTags: prefillTags,
-                        // Use ACTIVE attributes for the Form
                         folderContext: widget.folder,
                       );
                       refresh();

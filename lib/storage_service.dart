@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
-import 'models.dart';
 import 'package:flutter/cupertino.dart';
+import 'models.dart';
 import 'attributes.dart';
 
 class StorageService {
@@ -48,7 +48,6 @@ class StorageService {
     }
   }
 
-  // --- NEW: Create Default Custom Attributes & Set Order ---
   Future<void> _ensureDefaultAttributes() async {
     final bool hasSeeded = _settingsBox.get(
       _hasSeededDefaultsKey,
@@ -56,7 +55,6 @@ class StorageService {
     );
 
     if (!hasSeeded) {
-      // Only create if list is empty to avoid duplicates on re-install scenarios
       if (getCustomAttributes().isEmpty) {
         final titleAttr = AttributeDefinition(
           key: 'title_default',
@@ -79,13 +77,10 @@ class StorageService {
           applyType: AttributeApplyType.entriesOnly,
         );
 
-        // Add them to storage
         await addCustomAttribute(titleAttr);
         await addCustomAttribute(notesAttr);
         await addCustomAttribute(imageAttr);
 
-        // FORCE SPECIFIC DEFAULT ORDER
-        // Image -> Title -> Notes -> Tag -> Date Edited -> Date Created
         final defaultOrder = [
           'image_default',
           'title_default',
@@ -96,14 +91,11 @@ class StorageService {
         ];
         await saveAttributeSortOrder(defaultOrder);
       }
-
-      // Mark as seeded so we don't overwrite user changes later
       await _settingsBox.put(_hasSeededDefaultsKey, true);
     }
   }
 
-  // ... [Rest of the file remains standard] ...
-
+  // --- Tag Category Methods ---
   List<TagCategory> getTagCategories() {
     final raw = _settingsBox.get(_tagCategoriesKey, defaultValue: []);
     if (raw is List) {
@@ -196,6 +188,7 @@ class StorageService {
     await _settingsBox.put(_tagMappingKey, mapping);
   }
 
+  // --- Tag Logic ---
   Map<String, String> getTagMapping() {
     final raw = _settingsBox.get(_tagMappingKey, defaultValue: {});
     return Map<String, String>.from(raw);
@@ -224,6 +217,7 @@ class StorageService {
     return AppConstants.categoryColors[idx];
   }
 
+  // --- Settings ---
   int getManageLibraryTabIndex() {
     final val = _settingsBox.get(_manageLibraryTabIndexKey, defaultValue: 0);
     if (val is int && val >= 0 && val <= 1) return val;
@@ -234,10 +228,12 @@ class StorageService {
     await _settingsBox.put(_manageLibraryTabIndexKey, index);
   }
 
+  // --- Hive Accessors ---
   Box get _entriesBox => Hive.box(_entriesBoxName);
   Box get _foldersBox => Hive.box(_foldersBoxName);
   Box get _settingsBox => Hive.box(_settingsBoxName);
 
+  // --- Entries ---
   List<AppEntry> getAllEntries() {
     final data = _entriesBox.values;
     return data
@@ -261,6 +257,7 @@ class StorageService {
 
   Future<void> deleteEntry(String id) async => await _entriesBox.delete(id);
 
+  // --- Folders ---
   List<AppFolder> getAllFolders() {
     final data = _foldersBox.values;
     return data
@@ -318,6 +315,7 @@ class StorageService {
     }).toList();
   }
 
+  // --- Global Tags ---
   List<String> getGlobalTags() =>
       _settingsBox
           .get(_globalTagsKey, defaultValue: <String>[])
@@ -417,6 +415,7 @@ class StorageService {
     }).toList();
   }
 
+  // --- Custom Attributes & Sorting ---
   List<AttributeDefinition> getCustomAttributes() {
     final raw = _settingsBox.get(_customAttributesKey, defaultValue: []);
     if (raw is List) {
@@ -442,7 +441,6 @@ class StorageService {
       _customAttributesKey,
       list.map((e) => e.toJson()).toList(),
     );
-    // Append to sort order list
     final currentOrder = getAttributeSortOrder();
     currentOrder.add(attr.key);
     await saveAttributeSortOrder(currentOrder);

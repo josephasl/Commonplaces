@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../storage_service.dart';
-import '../models.dart';
+import '../../storage_service.dart';
+import '../../models.dart';
+import '../ui/app_styles.dart';
 import '../dialogs.dart';
 
 class EditTagsScreen extends StatefulWidget {
@@ -14,7 +15,6 @@ class EditTagsScreen extends StatefulWidget {
   State<EditTagsScreen> createState() => EditTagsScreenState();
 }
 
-// Public State class so we can access scrollToTop via GlobalKey
 class EditTagsScreenState extends State<EditTagsScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -27,7 +27,6 @@ class EditTagsScreenState extends State<EditTagsScreen> {
     super.dispose();
   }
 
-  // Public method called by parent
   void scrollToTop() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -46,12 +45,9 @@ class EditTagsScreenState extends State<EditTagsScreen> {
   @override
   Widget build(BuildContext context) {
     final categories = widget.storage.getTagCategories();
-    // Sort logic is handled by the list order in storage, which ReorderableListView updates
-
     final mapping = widget.storage.getTagMapping();
     final allTags = widget.storage.getGlobalTags();
 
-    // Filter tags
     List<String> visibleTags = allTags;
     if (_searchQuery.isNotEmpty) {
       visibleTags = allTags
@@ -59,34 +55,21 @@ class EditTagsScreenState extends State<EditTagsScreen> {
           .toList();
     }
 
-    // Group Tags
     final Map<String, List<String>> grouped = {};
-    for (var cat in categories) {
-      grouped[cat.id] = [];
-    }
-
-    // Add Uncategorized bucket if not present
-    if (!grouped.containsKey('default_grey_cat')) {
+    for (var cat in categories) grouped[cat.id] = [];
+    if (!grouped.containsKey('default_grey_cat'))
       grouped['default_grey_cat'] = [];
-    }
 
     for (var tag in visibleTags) {
       final catId = mapping[tag] ?? 'default_grey_cat';
-      if (grouped.containsKey(catId)) {
+      if (grouped.containsKey(catId))
         grouped[catId]!.add(tag);
-      } else {
-        // Fallback for tags pointing to deleted categories
+      else
         grouped['default_grey_cat']?.add(tag);
-      }
     }
 
-    // Identify the "Uncategorized" category object if it exists in the list,
-    // or handle it manually if it's implicit.
-    // The provided code assumes 'default_grey_cat' might be in 'categories' or handled implicitly.
-    // We will follow the loop logic: The ReorderableListView builds items based on 'categories'.
-
     return Container(
-      color: const Color(0xFFF2F2F7), // iOS Grouped Background
+      color: AppColors.groupedBackground,
       child: Stack(
         children: [
           ReorderableListView.builder(
@@ -111,19 +94,14 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                 elevation: 4,
                 color: Colors.transparent,
                 shadowColor: Colors.black26,
-                child:
-                    child, // The child is already the Container with decoration
+                child: child,
               );
             },
             itemBuilder: (context, index) {
               final cat = categories[index];
               final catTags = grouped[cat.id] ?? [];
-
-              // Hide empty categories if searching
-              if (catTags.isEmpty && _searchQuery.isNotEmpty) {
+              if (catTags.isEmpty && _searchQuery.isNotEmpty)
                 return Container(key: ValueKey(cat.id));
-              }
-
               final isUncategorized = cat.id == 'default_grey_cat';
 
               return Container(
@@ -131,12 +109,10 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- CATEGORY HEADER ---
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
                       child: Row(
                         children: [
-                          // Reorder Handle
                           ReorderableDragStartListener(
                             index: index,
                             child: const Padding(
@@ -148,27 +124,18 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                               ),
                             ),
                           ),
-                          // Category Icon
                           Icon(
                             AppConstants.categoryIcons[cat.iconIndex],
                             color: AppConstants.categoryColors[cat.colorIndex],
                             size: 18,
                           ),
                           const SizedBox(width: 8),
-                          // Category Name
                           Expanded(
                             child: Text(
                               cat.name.toUpperCase(),
-                              style: const TextStyle(
-                                fontFamily: '.SF Pro Text',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: CupertinoColors.systemGrey,
-                                letterSpacing: -0.2,
-                              ),
+                              style: AppTextStyles.subHeader,
                             ),
                           ),
-                          // Edit Category Button
                           if (!isUncategorized)
                             GestureDetector(
                               onTap: () => showEditCategoryDialog(
@@ -190,23 +157,16 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                         ],
                       ),
                     ),
-
-                    // --- TAGS CONTAINER ---
                     if (catTags.isEmpty)
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16),
                         width: double.infinity,
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                        decoration: AppDecorations.groupedItem,
                         child: Text(
                           "No tags in this category",
-                          style: TextStyle(
-                            fontFamily: '.SF Pro Text',
+                          style: AppTextStyles.bodySmall.copyWith(
                             color: Colors.grey.shade400,
-                            fontSize: 14,
                             fontStyle: FontStyle.italic,
                           ),
                           textAlign: TextAlign.center,
@@ -215,15 +175,11 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                     else
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                        decoration: AppDecorations.groupedItem,
                         child: Column(
                           children: List.generate(catTags.length, (tagIndex) {
                             final tag = catTags[tagIndex];
                             final isLast = tagIndex == catTags.length - 1;
-
                             return Column(
                               children: [
                                 Material(
@@ -253,13 +209,7 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                                         children: [
                                           Text(
                                             "#$tag",
-                                            style: const TextStyle(
-                                              fontFamily: '.SF Pro Text',
-                                              fontSize: 16,
-                                              color: Colors.black,
-                                              fontWeight: FontWeight.normal,
-                                              letterSpacing: -0.3,
-                                            ),
+                                            style: AppTextStyles.body,
                                           ),
                                           const Spacer(),
                                           const Icon(
@@ -289,8 +239,6 @@ class EditTagsScreenState extends State<EditTagsScreen> {
               );
             },
           ),
-
-          // --- FLOATING SEARCH & ADD BUTTON ---
           Positioned(
             bottom: 20,
             left: 16,

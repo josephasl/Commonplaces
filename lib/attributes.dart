@@ -17,7 +17,6 @@ class AttributeDefinition {
     this.isSystemField = false,
   });
 
-  // Serialization for Custom Attributes
   Map<String, dynamic> toJson() => {
     'key': key,
     'label': label,
@@ -38,7 +37,6 @@ class AttributeDefinition {
 }
 
 // 1. HARDCODED SYSTEM ATTRIBUTES
-// REMOVED: 'title' and 'image' are no longer system attributes.
 const Map<String, AttributeDefinition> _systemAttributes = {
   "tag": AttributeDefinition(
     key: "tag",

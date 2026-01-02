@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'models.dart';
-import 'attributes.dart';
+import '../../models.dart';
+import '../../attributes.dart';
+import '../ui/app_styles.dart';
 
 class EntryCard extends StatelessWidget {
   final AppEntry entry;
@@ -22,30 +23,14 @@ class EntryCard extends StatelessWidget {
     final keysToShow = visibleAttributes ?? ['title', 'tag', 'notes'];
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: AppDecorations.card,
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: keysToShow.map((key) {
           final definition = registry[key];
           if (definition == null) return const SizedBox.shrink();
-
           final value = entry.getAttribute(key);
-
-          // FIX: We no longer hide the widget if empty.
-          // We pass it to the renderer to show the placeholder.
-
           return Padding(
             padding: const EdgeInsets.only(bottom: 6.0),
             child: _buildAttributeRenderer(definition, value),
@@ -61,23 +46,18 @@ class EntryCard extends StatelessWidget {
         value.toString().isEmpty ||
         (value is List && value.isEmpty);
 
-    // 1. TITLE
     if (def.key == 'title') {
       return Text(
         isEmpty ? "-" : value.toString(),
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        style: AppTextStyles.bodySmall.copyWith(
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
+        ),
       );
     }
 
-    // 2. TAGS
     if (def.key == 'tag') {
-      if (isEmpty) {
-        return const Text(
-          "-",
-          style: TextStyle(color: Colors.grey, fontSize: 12),
-        );
-      }
-
+      if (isEmpty) return Text("-", style: AppTextStyles.caption);
       List<String> tags = [];
       if (value is String)
         tags = [value];
@@ -116,7 +96,6 @@ class EntryCard extends StatelessWidget {
       );
     }
 
-    // 3. IMAGE
     if (def.type == AttributeValueType.image) {
       final hasUrl = !isEmpty;
       return Container(
@@ -146,7 +125,6 @@ class EntryCard extends StatelessWidget {
       );
     }
 
-    // 4. DATE (Show Icon + "-")
     if (def.type == AttributeValueType.date) {
       String dateStr = "-";
       if (!isEmpty) {
@@ -155,15 +133,12 @@ class EntryCard extends StatelessWidget {
           d = value;
         else if (value is String)
           d = DateTime.tryParse(value);
-
-        if (d != null) {
+        if (d != null)
           dateStr =
               "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-        } else {
+        else
           dateStr = value.toString();
-        }
       }
-
       return Row(
         children: [
           Icon(
@@ -174,40 +149,35 @@ class EntryCard extends StatelessWidget {
             color: Colors.grey,
           ),
           const SizedBox(width: 4),
-          Text(
-            dateStr,
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
+          Text(dateStr, style: AppTextStyles.caption.copyWith(fontSize: 11)),
         ],
       );
     }
 
-    // 5. RATING / NUMBER
     if (def.type == AttributeValueType.number ||
         def.type == AttributeValueType.rating) {
       if (def.key == 'starRating') {
         return Row(
           children: [
             const Icon(Icons.star, size: 14, color: Colors.amber),
-            Text(
-              isEmpty ? " -" : " $value",
-              style: const TextStyle(fontSize: 12),
-            ),
+            Text(isEmpty ? " -" : " $value", style: AppTextStyles.caption),
           ],
         );
       }
       return Text(
         "${def.label}: ${isEmpty ? '-' : value}",
-        style: const TextStyle(fontSize: 12),
+        style: AppTextStyles.caption,
       );
     }
 
-    // 6. DEFAULT TEXT
     return Text(
       isEmpty ? "-" : value.toString(),
       maxLines: 4,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+      style: AppTextStyles.bodySmall.copyWith(
+        color: Colors.grey.shade700,
+        fontSize: 12,
+      ),
     );
   }
 }
@@ -228,15 +198,11 @@ class FolderCard extends StatelessWidget {
 
   Color _getMixedColor() {
     if (color != null) return color!;
-    if (folder.displayTags.isEmpty || tagColorResolver == null) {
+    if (folder.displayTags.isEmpty || tagColorResolver == null)
       return CupertinoColors.activeBlue;
-    }
     List<Color> colors = [];
-    for (var tag in folder.displayTags) {
-      colors.add(tagColorResolver!(tag));
-    }
+    for (var tag in folder.displayTags) colors.add(tagColorResolver!(tag));
     if (colors.isEmpty) return CupertinoColors.activeBlue;
-
     int r = 0, g = 0, b = 0;
     for (var c in colors) {
       r += c.red;
@@ -292,21 +258,18 @@ class FolderCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             folder.getAttribute<String>('title') ?? "Untitled",
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            style: AppTextStyles.header.copyWith(fontSize: 16),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
-
           if (folder.displayTags.isNotEmpty)
             Wrap(
               spacing: 4,
               runSpacing: 4,
               children: folder.displayTags.take(3).map((t) {
                 Color chipColor = Colors.grey;
-                if (tagColorResolver != null) {
-                  chipColor = tagColorResolver!(t);
-                }
+                if (tagColorResolver != null) chipColor = tagColorResolver!(t);
                 return Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,

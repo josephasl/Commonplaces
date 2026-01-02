@@ -1,4 +1,5 @@
 import 'dart:math'; // Required for the shake rotation
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class Shakeable extends StatefulWidget {
@@ -56,6 +57,59 @@ class _ShakeableState extends State<Shakeable>
 
         return Transform.rotate(angle: angle, child: widget.child);
       },
+    );
+  }
+}
+
+class ShakeableWithDelete extends StatelessWidget {
+  final Widget child;
+  final bool enabled;
+  final VoidCallback onDelete;
+
+  const ShakeableWithDelete({
+    super.key,
+    required this.child,
+    required this.enabled,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Shakeable(
+      enabled: enabled,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          child,
+          if (enabled)
+            Positioned(
+              top: -8,
+              right: -8,
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8E8E93),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: const Icon(
+                    CupertinoIcons.xmark,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

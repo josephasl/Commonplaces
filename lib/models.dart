@@ -128,6 +128,14 @@ class AppFolder {
     return ['tag'];
   }
 
+  String get sortKey => attributes['sortKey']?.toString() ?? 'dateCreated';
+  bool get sortAscending => (attributes['sortAscending'] as bool?) ?? false;
+
+  void setSortPreferences(String key, bool ascending) {
+    attributes['sortKey'] = key;
+    attributes['sortAscending'] = ascending;
+  }
+
   void setVisibleAttributes(List<String> attrs) =>
       attributes['visibleAttributes'] = attrs;
 

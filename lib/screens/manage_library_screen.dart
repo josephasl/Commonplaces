@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../storage_service.dart';
-import '../attributes.dart';
-import '../models.dart';
+import '../../storage_service.dart';
+import '../../attributes.dart';
+import '../../models.dart';
 import '../dialogs.dart';
+import '../ui/app_styles.dart';
 import 'edit_tags_screen.dart';
 
 // Sort Options Enum
@@ -72,26 +73,34 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.white,
+
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          "Manage Library",
-          style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.w600,
-            fontSize: 17,
-            fontFamily: '.SF Pro Text',
-          ),
-        ),
-        // REMOVED: actions: [] (The + button is now floating in the tabs)
+        title: const Text("Manage Library", style: AppTextStyles.header),
+        actions: [
+          // ADD BUTTON: Only show "New Category" icon on the Stamps Tab.
+          // The Attributes Tab uses a floating button.
+          if (_tabController.index == 0)
+            IconButton(
+              icon: const Icon(
+                CupertinoIcons.folder_badge_plus,
+                color: AppColors.primary,
+              ),
+              tooltip: "New Category",
+              onPressed: () {
+                showAddCategoryDialog(context, widget.storage, _refresh);
+              },
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60.0),
           child: Column(
             children: [
-              Container(color: Colors.grey.shade200, height: 1.0),
+              Container(color: AppColors.border.withOpacity(0.2), height: 1.0),
               const SizedBox(height: 3),
               Container(
                 height: 36,
@@ -100,14 +109,14 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
+                  color: AppColors.inputBackground,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   dividerColor: Colors.transparent,
                   indicator: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.background,
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
@@ -118,12 +127,9 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
                     ],
                   ),
                   indicatorSize: TabBarIndicatorSize.tab,
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.grey.shade600,
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
+                  labelColor: AppColors.textPrimary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  labelStyle: AppTextStyles.subHeader,
                   tabs: const [
                     Tab(text: "Stamp Groups"),
                     Tab(text: "Attributes"),
@@ -170,96 +176,18 @@ class _AttributesManager extends StatefulWidget {
 }
 
 class _AttributesManagerState extends State<_AttributesManager> {
-  AttributeSortOption _currentSort = AttributeSortOption.dateNewest;
-
   void _refresh() {
     setState(() {});
     widget.onUpdate?.call();
   }
 
-  // Helper to extract timestamp from key
-  int _getTimestamp(String key) {
-    try {
-      final parts = key.split('_');
-      if (parts.length > 1) {
-        return int.parse(parts.last);
-      }
-    } catch (_) {}
-    return 0;
-  }
-
-  void _showSortSheet() {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => CupertinoActionSheet(
-        title: const Text("Sort Attributes By"),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = AttributeSortOption.nameAsc);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Name (A-Z)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = AttributeSortOption.nameDesc);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Name (Z-A)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = AttributeSortOption.dateNewest);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Date Created (Newest)"),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () {
-              setState(() => _currentSort = AttributeSortOption.dateOldest);
-              Navigator.pop(ctx);
-            },
-            child: const Text("Date Created (Oldest)"),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text("Cancel"),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // 1. Get ALL attributes (System + Custom), sorted by user preference
+    // 1. Get ALL attributes (System + Custom), sorted by user preference (drag order)
     final allAttributes = widget.storage.getSortedAttributeDefinitions();
 
-    // 2. Apply temporary local sort if needed (optional overlay on top of saved order)
-    // Note: Reordering disables local sorting usually, but here we sort for display
-    // or respect drag order. If drag happens, we usually want "Custom Order".
-    // For simplicity, we respect the storage order primarily. If _currentSort is set,
-    // we re-sort the list temporarily.
-    if (_currentSort != AttributeSortOption.dateNewest) {
-      allAttributes.sort((a, b) {
-        switch (_currentSort) {
-          case AttributeSortOption.nameAsc:
-            return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-          case AttributeSortOption.nameDesc:
-            return b.label.toLowerCase().compareTo(a.label.toLowerCase());
-          case AttributeSortOption.dateOldest:
-            return _getTimestamp(a.key).compareTo(_getTimestamp(b.key));
-          case AttributeSortOption.dateNewest:
-          default:
-            return _getTimestamp(b.key).compareTo(_getTimestamp(a.key));
-        }
-      });
-    }
-
     return Container(
-      color: const Color(0xFFF2F2F7),
+      color: AppColors.groupedBackground,
       child: Stack(
         children: [
           ReorderableListView.builder(
@@ -276,10 +204,7 @@ class _AttributesManagerState extends State<_AttributesManager> {
               );
             },
             onReorder: (oldIndex, newIndex) async {
-              // Reset sort to 'dateNewest' (which effectively means "Custom/Manual")
-              // so the drag sticks visually.
               setState(() {
-                _currentSort = AttributeSortOption.dateNewest;
                 if (oldIndex < newIndex) newIndex -= 1;
                 final item = allAttributes.removeAt(oldIndex);
                 allAttributes.insert(newIndex, item);
@@ -297,7 +222,7 @@ class _AttributesManagerState extends State<_AttributesManager> {
                 key: ValueKey(attr.key),
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.background,
                   // Grouped style rounding
                   borderRadius: BorderRadius.vertical(
                     top: index == 0 ? const Radius.circular(10) : Radius.zero,
@@ -355,12 +280,10 @@ class _AttributesManagerState extends State<_AttributesManager> {
                                   children: [
                                     Text(
                                       attr.label,
-                                      style: TextStyle(
-                                        fontFamily: '.SF Pro Text',
-                                        fontSize: 14,
+                                      style: AppTextStyles.body.copyWith(
                                         color: isSystem
-                                            ? Colors.grey.shade700
-                                            : Colors.black,
+                                            ? AppColors.textSecondary
+                                            : AppColors.textPrimary,
                                         fontWeight: isSystem
                                             ? FontWeight.w500
                                             : FontWeight.normal,
@@ -369,11 +292,9 @@ class _AttributesManagerState extends State<_AttributesManager> {
                                     const SizedBox(height: 2),
                                     Text(
                                       attr.type.name.toUpperCase(),
-                                      style: const TextStyle(
-                                        fontFamily: '.SF Pro Text',
-                                        fontSize: 10,
-                                        color: CupertinoColors.systemGrey,
+                                      style: AppTextStyles.caption.copyWith(
                                         fontWeight: FontWeight.w600,
+                                        fontSize: 10,
                                       ),
                                     ),
                                   ],
@@ -403,7 +324,7 @@ class _AttributesManagerState extends State<_AttributesManager> {
                         height: 1,
                         thickness: 1,
                         indent: 44, // Align with text
-                        color: Color(0xFFF0F0F0),
+                        color: AppColors.divider,
                       ),
                   ],
                 ),
@@ -411,35 +332,29 @@ class _AttributesManagerState extends State<_AttributesManager> {
             },
           ),
 
-          // --- FLOATING ACTION BUTTONS ---
+          // --- FLOATING ADD BUTTON (Restored) ---
           Positioned(
             bottom: 20,
             right: 16,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 2. Add Button (Black Circle)
-                GestureDetector(
-                  onTap: () =>
-                      showAddAttributeDialog(context, widget.storage, _refresh),
-                  child: Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+            child: GestureDetector(
+              onTap: () =>
+                  showAddAttributeDialog(context, widget.storage, _refresh),
+              child: Container(
+                height: 50,
+                width: 50,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                    child: const Icon(CupertinoIcons.add, color: Colors.white),
-                  ),
+                  ],
                 ),
-              ],
+                child: const Icon(CupertinoIcons.add, color: Colors.white),
+              ),
             ),
           ),
         ],

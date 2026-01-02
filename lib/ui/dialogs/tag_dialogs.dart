@@ -3,13 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../storage_service.dart';
 import '../../models.dart';
+import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 
-// --- PUBLIC WRAPPERS ---
-
-// Returns Future<String?> so caller can detect the new tag
 Future<String?> showAddTagDialog(
   BuildContext context,
   StorageService storage,
@@ -37,8 +35,6 @@ Future<void> showTagOptionsDialog(
   );
 }
 
-// --- UNIFIED TAG DIALOG IMPLEMENTATION ---
-
 Future<String?> _showTagDialog({
   required BuildContext context,
   required StorageService storage,
@@ -47,13 +43,9 @@ Future<String?> _showTagDialog({
 }) {
   final bool isEditMode = tagToEdit != null;
   final controller = TextEditingController(text: isEditMode ? tagToEdit : '');
-
-  // Pre-fetch category if editing
   String? selectedCategoryId;
+
   if (isEditMode) {
-    // Assuming you have a way to get the category ID for a tag.
-    // If not, it defaults to null (Uncategorized) or you might need a helper method.
-    // For now, we'll try to find it from the mapping.
     final mapping = storage.getTagMapping();
     selectedCategoryId = mapping[tagToEdit];
   }
@@ -68,27 +60,19 @@ Future<String?> _showTagDialog({
           Future<void> saveAndClose() async {
             if (controller.text.isNotEmpty) {
               final newName = controller.text;
-
               if (isEditMode) {
-                // Handle Rename if changed
                 if (newName != tagToEdit) {
                   await storage.renameGlobalTag(tagToEdit!, newName);
                 }
-                // Handle Category Move
                 if (selectedCategoryId != null) {
                   await storage.setTagCategory(newName, selectedCategoryId!);
-                } else {
-                  // If "None" selected, we might want to clear it (depends on implementation)
-                  // await storage.setTagCategory(newName, null); // If your backend supports clearing
                 }
               } else {
-                // Add New
                 await storage.addGlobalTag(newName);
                 if (selectedCategoryId != null) {
                   await storage.setTagCategory(newName, selectedCategoryId!);
                 }
               }
-
               onUpdate();
               if (ctx.mounted) Navigator.pop(ctx, newName);
             }
@@ -100,51 +84,24 @@ Future<String?> _showTagDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Stamp Name",
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Colors.black,
-                  ),
-                ),
+                const Text("Stamp Name", style: AppTextStyles.label),
                 const SizedBox(height: 8),
                 CupertinoTextField(
                   controller: controller,
                   placeholder: "Enter name",
                   padding: const EdgeInsets.all(12),
-                  autofocus: !isEditMode, // Only autofocus on add
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey6,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  style: const TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 16,
-                    color: Colors.black,
-                  ),
+                  autofocus: !isEditMode,
+                  decoration: AppDecorations.input,
+                  style: AppTextStyles.body,
                   onSubmitted: (_) => saveAndClose(),
                 ),
-
                 const SizedBox(height: 24),
-                const Text(
-                  "Group",
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Colors.black,
-                  ),
-                ),
+                const Text("Group", style: AppTextStyles.label),
                 const SizedBox(height: 12),
-
-                // --- Category Selection ---
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      // "None" Option
                       GestureDetector(
                         onTap: () => setState(() => selectedCategoryId = null),
                         child: Container(
@@ -156,7 +113,7 @@ Future<String?> _showTagDialog({
                           decoration: BoxDecoration(
                             color: selectedCategoryId == null
                                 ? CupertinoColors.systemGrey4
-                                : CupertinoColors.systemGrey6,
+                                : AppColors.inputBackground,
                             borderRadius: BorderRadius.circular(12),
                             border: selectedCategoryId == null
                                 ? Border.all(color: Colors.black54, width: 1.5)
@@ -164,26 +121,21 @@ Future<String?> _showTagDialog({
                           ),
                           child: Text(
                             "None",
-                            style: TextStyle(
-                              fontFamily: '.SF Pro Text',
-                              fontSize: 14,
-                              color: selectedCategoryId == null
-                                  ? Colors.black
-                                  : Colors.black54,
+                            style: AppTextStyles.bodySmall.copyWith(
                               fontWeight: selectedCategoryId == null
                                   ? FontWeight.w600
                                   : FontWeight.normal,
+                              color: selectedCategoryId == null
+                                  ? Colors.black
+                                  : Colors.black54,
                             ),
                           ),
                         ),
                       ),
-
-                      // Available Categories
                       ...categories.map((cat) {
                         final isSelected = selectedCategoryId == cat.id;
                         final catColor =
                             AppConstants.categoryColors[cat.colorIndex];
-
                         return GestureDetector(
                           onTap: () =>
                               setState(() => selectedCategoryId = cat.id),
@@ -196,7 +148,7 @@ Future<String?> _showTagDialog({
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? catColor.withOpacity(0.2)
-                                  : CupertinoColors.systemGrey6,
+                                  : AppColors.inputBackground,
                               borderRadius: BorderRadius.circular(12),
                               border: isSelected
                                   ? Border.all(color: catColor, width: 1.5)
@@ -212,12 +164,7 @@ Future<String?> _showTagDialog({
                                 const SizedBox(width: 6),
                                 Text(
                                   cat.name,
-                                  style: TextStyle(
-                                    fontFamily: '.SF Pro Text',
-                                    fontSize: 14,
-                                    color: isSelected
-                                        ? Colors.black
-                                        : Colors.black87,
+                                  style: AppTextStyles.bodySmall.copyWith(
                                     fontWeight: isSelected
                                         ? FontWeight.w600
                                         : FontWeight.normal,
@@ -231,8 +178,6 @@ Future<String?> _showTagDialog({
                     ],
                   ),
                 ),
-
-                // --- DELETE BUTTON (Edit Mode Only) ---
                 if (isEditMode) ...[
                   const SizedBox(height: 32),
                   DeleteTriggerButton(
@@ -260,8 +205,6 @@ Future<String?> _showTagDialog({
     },
   );
 }
-
-// --- CATEGORY DIALOGS (Keep these as they were, but updated font styles slightly to match) ---
 
 Future<void> showAddCategoryDialog(
   BuildContext context,
@@ -295,52 +238,25 @@ Future<void> showAddCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Group name",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Group name", style: AppTextStyles.label),
               const SizedBox(height: 8),
               CupertinoTextField(
                 controller: nameController,
                 placeholder: "Enter group name",
                 padding: const EdgeInsets.all(12),
                 autofocus: true,
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                style: const TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontSize: 16,
-                ),
+                decoration: AppDecorations.input,
+                style: AppTextStyles.body,
               ),
               const SizedBox(height: 24),
-              const Text(
-                "Color",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Color", style: AppTextStyles.label),
               const SizedBox(height: 12),
               _buildColorPicker(
                 selectedColorIndex,
                 (i) => setState(() => selectedColorIndex = i),
               ),
               const SizedBox(height: 24),
-              const Text(
-                "Icon",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Icon", style: AppTextStyles.label),
               const SizedBox(height: 12),
               _buildIconPicker(
                 selectedIconIndex,
@@ -389,57 +305,29 @@ Future<void> showEditCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Category Name",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Category Name", style: AppTextStyles.label),
               const SizedBox(height: 8),
               CupertinoTextField(
                 controller: nameController,
                 placeholder: "Enter category name",
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                style: const TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontSize: 16,
-                ),
+                decoration: AppDecorations.input,
+                style: AppTextStyles.body,
               ),
               const SizedBox(height: 24),
-              const Text(
-                "Color",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Color", style: AppTextStyles.label),
               const SizedBox(height: 12),
               _buildColorPicker(
                 selectedColorIndex,
                 (i) => setState(() => selectedColorIndex = i),
               ),
               const SizedBox(height: 24),
-              const Text(
-                "Icon",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
+              const Text("Icon", style: AppTextStyles.label),
               const SizedBox(height: 12),
               _buildIconPicker(
                 selectedIconIndex,
                 (i) => setState(() => selectedIconIndex = i),
               ),
-
               const SizedBox(height: 32),
               DeleteTriggerButton(
                 label: "Delete Category",
@@ -464,8 +352,6 @@ Future<void> showEditCategoryDialog(
     ),
   );
 }
-
-// --- HELPERS ---
 
 Widget _buildColorPicker(int selectedIndex, Function(int) onSelect) {
   return SingleChildScrollView(

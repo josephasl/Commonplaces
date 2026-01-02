@@ -9,3 +9,4 @@ export 'ui/dialogs/entry_dialogs.dart';
 export 'ui/dialogs/tag_dialogs.dart';
 export 'ui/dialogs/attribute_dialogs.dart';
 export 'ui/dialogs/confirm_dialog.dart';
+export 'ui/dialogs/sort_bottom_sheet.dart';

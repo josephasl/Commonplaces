@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../models.dart';
-import '../attributes.dart';
-import '../storage_service.dart';
+import '../../models.dart';
+import '../../attributes.dart';
+import '../../storage_service.dart';
+import '../ui/app_styles.dart';
 import '../dialogs.dart';
 
 class EntryScreen extends StatefulWidget {
@@ -28,8 +29,6 @@ class EntryScreen extends StatefulWidget {
 class _EntryScreenState extends State<EntryScreen> {
   late PageController _pageController;
   late int _currentIndex;
-
-  // Lock to prevent multiple triggers during one swipe
   bool _isSwitchingPage = false;
 
   @override
@@ -72,7 +71,6 @@ class _EntryScreenState extends State<EntryScreen> {
     final visibleKeys = widget.folder.visibleAttributes;
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
-
     final currentEntry =
         (widget.entries.isNotEmpty && _currentIndex < widget.entries.length)
         ? widget.entries[_currentIndex]
@@ -81,23 +79,20 @@ class _EntryScreenState extends State<EntryScreen> {
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity != null && details.primaryVelocity! > 200) {
+        if (details.primaryVelocity != null && details.primaryVelocity! > 200)
           Navigator.of(context).pop();
-        }
       },
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
           backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+
           elevation: 0,
           leading: const BackButton(color: Colors.black),
           title: Text(
             "${_currentIndex + 1} / ${widget.entries.length}",
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              fontWeight: FontWeight.normal,
-            ),
+            style: AppTextStyles.caption.copyWith(fontSize: 12),
           ),
           centerTitle: true,
           actions: [
@@ -116,20 +111,16 @@ class _EntryScreenState extends State<EntryScreen> {
                   () {
                     final all = widget.storage.getAllEntries();
                     final exists = all.any((e) => e.id == currentEntry.id);
-
                     if (!exists) {
                       setState(() {
                         widget.entries.removeAt(_currentIndex);
-                        if (_currentIndex >= widget.entries.length) {
+                        if (_currentIndex >= widget.entries.length)
                           _currentIndex = (widget.entries.length - 1).clamp(
                             0,
                             99999,
                           );
-                        }
                       });
-                      if (widget.entries.isEmpty) {
-                        Navigator.of(context).pop();
-                      }
+                      if (widget.entries.isEmpty) Navigator.of(context).pop();
                     } else {
                       setState(() {});
                     }
@@ -142,7 +133,6 @@ class _EntryScreenState extends State<EntryScreen> {
             child: Container(color: Colors.grey.shade200, height: 1.0),
           ),
         ),
-
         body: widget.entries.isEmpty
             ? const Center(child: Text("No entries"))
             : PageView.builder(
@@ -150,38 +140,29 @@ class _EntryScreenState extends State<EntryScreen> {
                 scrollDirection: Axis.vertical,
                 physics: const BouncingScrollPhysics(),
                 onPageChanged: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                  if (index < widget.entries.length) {
+                  setState(() => _currentIndex = index);
+                  if (index < widget.entries.length)
                     widget.onEntryChanged(widget.entries[index]);
-                  }
                 },
                 itemCount: widget.entries.length,
                 itemBuilder: (context, index) {
                   final entry = widget.entries[index];
-
                   return Hero(
                     tag: 'entry_hero_${entry.id}',
                     child: Material(
                       color: Colors.white,
-                      // Listen to scroll updates to detect the "Bounce" distance
                       child: NotificationListener<ScrollUpdateNotification>(
                         onNotification: (notification) {
                           const double threshold = 60.0;
                           final metrics = notification.metrics;
-
                           if (notification.dragDetails == null) return false;
-
-                          if (metrics.pixels < -threshold) {
+                          if (metrics.pixels < -threshold)
                             _goToPreviousPage();
-                          } else if (metrics.pixels >
-                              metrics.maxScrollExtent + threshold) {
+                          else if (metrics.pixels >
+                              metrics.maxScrollExtent + threshold)
                             _goToNextPage();
-                          }
                           return false;
                         },
-                        // Removed Center widget to allow top alignment
                         child: SizedBox.expand(
                           child: SingleChildScrollView(
                             physics: const BouncingScrollPhysics(
@@ -191,26 +172,20 @@ class _EntryScreenState extends State<EntryScreen> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                ...visibleKeys.map((key) {
-                                  final definition = registry[key];
-                                  if (definition == null)
-                                    return const SizedBox.shrink();
-
-                                  final value = entry.getAttribute(key);
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: 24.0,
-                                    ),
-                                    child: _buildAttributeDisplay(
-                                      definition,
-                                      value,
-                                      widget.storage,
-                                    ),
-                                  );
-                                }).toList(),
-                              ],
+                              children: visibleKeys.map((key) {
+                                final definition = registry[key];
+                                if (definition == null)
+                                  return const SizedBox.shrink();
+                                final value = entry.getAttribute(key);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 24.0),
+                                  child: _buildAttributeDisplay(
+                                    definition,
+                                    value,
+                                    widget.storage,
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
                         ),
@@ -233,13 +208,11 @@ class _EntryScreenState extends State<EntryScreen> {
         value.toString().isEmpty ||
         (value is List && value.isEmpty);
 
-    // 1. IMAGE
     if (def.type == AttributeValueType.image) {
       final bool hasUrl = !isEmpty;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // REMOVED LABEL FOR IMAGE
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: hasUrl
@@ -255,12 +228,10 @@ class _EntryScreenState extends State<EntryScreen> {
       );
     }
 
-    // 2. RATING
     if (def.type == AttributeValueType.rating) {
       final rating = (!isEmpty && value is int)
           ? value
           : (int.tryParse(value.toString()) ?? 0);
-
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -268,21 +239,21 @@ class _EntryScreenState extends State<EntryScreen> {
           isEmpty
               ? const Text("-", style: TextStyle(fontSize: 16))
               : Row(
-                  children: List.generate(5, (index) {
-                    return Icon(
+                  children: List.generate(
+                    5,
+                    (index) => Icon(
                       index < rating
                           ? CupertinoIcons.star_fill
                           : CupertinoIcons.star,
                       color: CupertinoColors.systemYellow,
                       size: 24,
-                    );
-                  }),
+                    ),
+                  ),
                 ),
         ],
       );
     }
 
-    // 3. TAGS
     if (def.key == 'tag') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,7 +295,6 @@ class _EntryScreenState extends State<EntryScreen> {
       );
     }
 
-    // 4. DATE
     if (def.type == AttributeValueType.date) {
       String dateStr = "-";
       if (!isEmpty) {
@@ -333,15 +303,12 @@ class _EntryScreenState extends State<EntryScreen> {
           d = value;
         else if (value is String)
           d = DateTime.tryParse(value);
-
-        if (d != null) {
+        if (d != null)
           dateStr =
               "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-        } else {
+        else
           dateStr = value.toString();
-        }
       }
-
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -354,7 +321,6 @@ class _EntryScreenState extends State<EntryScreen> {
       );
     }
 
-    // 5. DEFAULT TEXT
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -404,10 +370,9 @@ class _EntryScreenState extends State<EntryScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 11,
+        style: AppTextStyles.caption.copyWith(
           fontWeight: FontWeight.w700,
-          color: CupertinoColors.systemGrey,
+          fontSize: 11,
         ),
       ),
     );

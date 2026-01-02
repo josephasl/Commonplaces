@@ -1,15 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:reorderables/reorderables.dart'; // Assuming this is unused based on usage of ReorderableListView.builder
+import 'package:reorderables/reorderables.dart';
 import '../../storage_service.dart';
 import '../../models.dart';
 import '../../attributes.dart';
+import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 import 'tag_dialogs.dart';
-
-// --- PUBLIC WRAPPERS ---
 
 Future<void> showAddFolderDialog(
   BuildContext context,
@@ -38,8 +37,6 @@ Future<void> showEditFolderDialog(
   );
 }
 
-// --- UNIFIED DIALOG IMPLEMENTATION ---
-
 Future<void> _showFolderDialog({
   required BuildContext context,
   required StorageService storage,
@@ -47,7 +44,6 @@ Future<void> _showFolderDialog({
   AppFolder? folderToEdit,
 }) {
   final bool isEditMode = folderToEdit != null;
-
   final TextEditingController titleController = TextEditingController(
     text: isEditMode ? folderToEdit.getAttribute('title') : '',
   );
@@ -55,25 +51,17 @@ Future<void> _showFolderDialog({
   return showCupertinoModalPopup(
     context: context,
     builder: (context) {
-      // 1. Setup Tags
       List<String> availableTags = List.from(storage.getGlobalTags());
       List<String> selectedTags = isEditMode
           ? List.from(folderToEdit!.displayTags)
           : [];
-
-      // 2. Setup Attributes with Default Sort Order
       final allDefinitions = storage.getSortedAttributeDefinitions();
-
-      // Initialize the toggle states locally
       final Set<String> activeSet = isEditMode
           ? Set.from(folderToEdit!.activeAttributes)
           : {'tag'};
-
       final Set<String> visibleSet = isEditMode
           ? Set.from(folderToEdit!.visibleAttributes)
           : {'tag'};
-
-      // 3. Initialize Sorting Order for THIS specific folder
       List<AttributeDefinition> sortedAttributes = List.from(allDefinitions);
 
       if (isEditMode && folderToEdit!.activeAttributes.isNotEmpty) {
@@ -81,7 +69,6 @@ Future<void> _showFolderDialog({
           for (var i = 0; i < folderToEdit!.activeAttributes.length; i++)
             folderToEdit!.activeAttributes[i]: i,
         };
-
         sortedAttributes.sort((a, b) {
           final indexA = orderMap[a.key] ?? 9999;
           final indexB = orderMap[b.key] ?? 9999;
@@ -113,26 +100,16 @@ Future<void> _showFolderDialog({
                 final folder = isEditMode
                     ? folderToEdit!
                     : storage.createNewFolder();
-
                 folder.setAttribute('title', titleController.text);
                 folder.setAttribute('displayTags', selectedTags);
-
-                // Reconstruct lists based on the NEW visual order
                 List<String> newActiveList = [];
                 List<String> newVisibleList = [];
-
                 for (var def in sortedAttributes) {
-                  if (activeSet.contains(def.key)) {
-                    newActiveList.add(def.key);
-                  }
-                  if (visibleSet.contains(def.key)) {
-                    newVisibleList.add(def.key);
-                  }
+                  if (activeSet.contains(def.key)) newActiveList.add(def.key);
+                  if (visibleSet.contains(def.key)) newVisibleList.add(def.key);
                 }
-
                 folder.setActiveAttributes(newActiveList);
                 folder.setVisibleAttributes(newVisibleList);
-
                 await storage.saveFolder(folder);
                 onUpdate();
                 if (context.mounted) Navigator.pop(context);
@@ -141,54 +118,28 @@ Future<void> _showFolderDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Folder Name",
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Colors.black,
-                  ),
-                ),
+                const Text("Folder Name", style: AppTextStyles.label),
                 const SizedBox(height: 8),
                 CupertinoTextField(
                   controller: titleController,
                   placeholder: "New folder",
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemGrey6,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  style: const TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontSize: 16,
-                    color: Colors.black,
-                  ),
+                  decoration: AppDecorations.input,
+                  style: AppTextStyles.body,
                 ),
-
                 const SizedBox(height: 24),
-
-                // --- TAGS SECTION ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    const Text(
-                      "Filter by Tags",
-                      style: TextStyle(
-                        fontFamily: '.SF Pro Text',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.black,
-                      ),
-                    ),
+                    const Text("Filter by Tags", style: AppTextStyles.label),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       minSize: 0,
                       child: const Text(
                         "New Tag",
-                        style: TextStyle(fontSize: 14),
+                        style: AppTextStyles.bodySmall,
                       ),
                       onPressed: () async {
                         final newTag = await showAddTagDialog(
@@ -198,9 +149,8 @@ Future<void> _showFolderDialog({
                         );
                         if (newTag != null && newTag.isNotEmpty) {
                           setState(() {
-                            if (!availableTags.contains(newTag)) {
+                            if (!availableTags.contains(newTag))
                               availableTags.add(newTag);
-                            }
                             selectedTags.add(newTag);
                           });
                         }
@@ -250,9 +200,7 @@ Future<void> _showFolderDialog({
                           ),
                           child: Text(
                             "#$tag",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.black,
+                            style: AppTextStyles.bodySmall.copyWith(
                               fontWeight: isSelected
                                   ? FontWeight.w500
                                   : FontWeight.normal,
@@ -262,38 +210,26 @@ Future<void> _showFolderDialog({
                       );
                     }).toList(),
                   ),
-
                 const SizedBox(height: 24),
-
-                // --- ATTRIBUTES HEADER ---
                 const Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        "Attributes",
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
+                      child: Text("Attributes", style: AppTextStyles.label),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-
-                // --- REORDERABLE ATTRIBUTE LIST ---
-                // FIX: Removed outer Container color.
-                // Using ReorderableListView directly with custom item styling.
                 SizedBox(
-                  height: 300, // Constrain height inside bottom sheet
+                  height: 300,
                   child: Theme(
                     data: ThemeData(
                       canvasColor: Colors.transparent,
                       shadowColor: Colors.transparent,
                     ),
                     child: ReorderableListView.builder(
-                      physics:
-                          const ClampingScrollPhysics(), // Scrollable if list is long
+                      physics: const ClampingScrollPhysics(),
                       itemCount: sortedAttributes.length,
                       onReorder: _onAttrReorder,
-                      // FIX: Added Proxy Decorator for drag effect
                       proxyDecorator: (child, index, animation) {
                         return Material(
                           elevation: 4,
@@ -305,7 +241,6 @@ Future<void> _showFolderDialog({
                       itemBuilder: (context, index) {
                         final def = sortedAttributes[index];
                         final attrKey = def.key;
-
                         final isActive = activeSet.contains(attrKey);
                         final isVisible = visibleSet.contains(attrKey);
                         final isMandatory = attrKey == 'tag';
@@ -313,7 +248,6 @@ Future<void> _showFolderDialog({
 
                         return Container(
                           key: ValueKey(attrKey),
-                          // FIX: Added white background and rounded corners logic
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.vertical(
@@ -329,12 +263,11 @@ Future<void> _showFolderDialog({
                             children: [
                               Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 8, // Increased padding
+                                  vertical: 8,
                                   horizontal: 8,
                                 ),
                                 child: Row(
                                   children: [
-                                    // 1. BURGER (Drag Handle) - LEFT
                                     ReorderableDragStartListener(
                                       index: index,
                                       child: const Padding(
@@ -349,21 +282,16 @@ Future<void> _showFolderDialog({
                                         ),
                                       ),
                                     ),
-
-                                    // 2. ATTRIBUTE NAME - CENTER
                                     Expanded(
                                       child: Text(
                                         def.label,
-                                        style: TextStyle(
-                                          fontSize: 14, // Matched font size
+                                        style: AppTextStyles.bodySmall.copyWith(
                                           color: isActive
                                               ? Colors.black
                                               : Colors.grey,
                                         ),
                                       ),
                                     ),
-
-                                    // 3. SQUARE TICKBOX (Active) - RIGHT
                                     CupertinoCheckbox(
                                       value: isActive,
                                       activeColor: CupertinoColors.activeBlue,
@@ -381,10 +309,7 @@ Future<void> _showFolderDialog({
                                               });
                                             },
                                     ),
-
                                     const SizedBox(width: 4),
-
-                                    // 4. EYE ICON (Visible) - RIGHT
                                     GestureDetector(
                                       behavior: HitTestBehavior.opaque,
                                       onTap: (!isActive)
@@ -410,18 +335,16 @@ Future<void> _showFolderDialog({
                                         size: 20,
                                       ),
                                     ),
-
                                     const SizedBox(width: 4),
                                   ],
                                 ),
                               ),
-                              // FIX: Added Divider logic
                               if (!isLast)
                                 const Divider(
                                   height: 1,
                                   thickness: 1,
-                                  indent: 44, // Align with text start
-                                  color: Color(0xFFF0F0F0),
+                                  indent: 44,
+                                  color: AppColors.divider,
                                 ),
                             ],
                           ),
@@ -430,7 +353,6 @@ Future<void> _showFolderDialog({
                     ),
                   ),
                 ),
-
                 if (isEditMode) ...[
                   const SizedBox(height: 24),
                   DeleteTriggerButton(

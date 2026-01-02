@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 
 Future<void> showDeleteConfirmationDialog({
@@ -28,7 +29,7 @@ Future<void> showDeleteConfirmationDialog({
                   message,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),
@@ -39,7 +40,7 @@ Future<void> showDeleteConfirmationDialog({
                     subtitle,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: CupertinoColors.systemGrey,
+                      color: AppColors.textSecondary,
                       fontSize: 14,
                     ),
                   ),
@@ -47,13 +48,11 @@ Future<void> showDeleteConfirmationDialog({
               ],
             ),
           ),
-
-          // Red Delete Button
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              color: CupertinoColors.destructiveRed,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.destructive,
+              borderRadius: BorderRadius.circular(AppDimens.radiusM),
               onPressed: () {
                 onConfirm();
                 Navigator.pop(ctx);

@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import '../app_styles.dart';
 
 class DeleteTriggerButton extends StatelessWidget {
   final String label;
@@ -16,16 +16,14 @@ class DeleteTriggerButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: CupertinoButton(
-        // Style: Light Red Background with Red Text (Common iOS "Destructive" Action style)
-        // If you prefer Solid Red with White text, change color to destructiveRed and text to white.
-        color: const Color(0xFFFFE5E5),
+        color: AppColors.destructiveBg,
         pressedOpacity: 0.7,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppDimens.radiusM),
         onPressed: onPressed,
         child: Text(
           label,
           style: const TextStyle(
-            color: CupertinoColors.destructiveRed,
+            color: AppColors.destructive,
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),

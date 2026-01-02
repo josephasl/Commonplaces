@@ -2,11 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../storage_service.dart';
 import '../../attributes.dart';
+import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 
-// --- ADD ATTRIBUTE ---
 Future<void> showAddAttributeDialog(
   BuildContext context,
   StorageService storage,
@@ -29,14 +29,12 @@ Future<void> showAddAttributeDialog(
                   .replaceAll(RegExp(r'\s+'), '_')
                   .toLowerCase();
               final key = "${safeLabel}_$timestamp";
-
               final newAttr = AttributeDefinition(
                 key: key,
                 label: labelController.text,
                 type: selectedType,
                 applyType: AttributeApplyType.entriesOnly,
               );
-
               await storage.addCustomAttribute(newAttr);
               onUpdate();
               if (ctx.mounted) Navigator.pop(ctx);
@@ -45,82 +43,57 @@ Future<void> showAddAttributeDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "Name",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: Colors.black,
-                ),
-              ),
+              const Text("Name", style: AppTextStyles.label),
               const SizedBox(height: 8),
               CupertinoTextField(
                 controller: labelController,
                 placeholder: "New name",
                 padding: const EdgeInsets.all(12),
                 autofocus: true,
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey6,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                style: const TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontSize: 16,
-                  color: Colors.black,
-                ),
+                decoration: AppDecorations.input,
+                style: AppTextStyles.body,
               ),
               const SizedBox(height: 24),
-              const Text(
-                "Type",
-                style: TextStyle(
-                  fontFamily: '.SF Pro Text',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: Colors.black,
-                ),
-              ),
+              const Text("Type", style: AppTextStyles.label),
               const SizedBox(height: 12),
-
-              // --- UPDATED: Horizontal Scroll Row (Matching Tag/Category Dialog Style) ---
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     _buildTypeOption(
-                      label: "Text",
-                      icon: CupertinoIcons.text_alignleft,
-                      type: AttributeValueType.text,
-                      selected: selectedType,
-                      onTap: (t) => setState(() => selectedType = t),
+                      "Text",
+                      CupertinoIcons.text_alignleft,
+                      AttributeValueType.text,
+                      selectedType,
+                      (t) => setState(() => selectedType = t),
                     ),
                     _buildTypeOption(
-                      label: "Number",
-                      icon: CupertinoIcons.number,
-                      type: AttributeValueType.number,
-                      selected: selectedType,
-                      onTap: (t) => setState(() => selectedType = t),
+                      "Number",
+                      CupertinoIcons.number,
+                      AttributeValueType.number,
+                      selectedType,
+                      (t) => setState(() => selectedType = t),
                     ),
                     _buildTypeOption(
-                      label: "Image",
-                      icon: CupertinoIcons.photo,
-                      type: AttributeValueType.image,
-                      selected: selectedType,
-                      onTap: (t) => setState(() => selectedType = t),
+                      "Image",
+                      CupertinoIcons.photo,
+                      AttributeValueType.image,
+                      selectedType,
+                      (t) => setState(() => selectedType = t),
                     ),
                     _buildTypeOption(
-                      label: "Date",
-                      icon: CupertinoIcons.calendar,
-                      type: AttributeValueType.date,
-                      selected: selectedType,
-                      onTap: (t) => setState(() => selectedType = t),
+                      "Date",
+                      CupertinoIcons.calendar,
+                      AttributeValueType.date,
+                      selectedType,
+                      (t) => setState(() => selectedType = t),
                     ),
                     _buildTypeOption(
-                      label: "Rating",
-                      icon: CupertinoIcons.star_fill,
-                      type: AttributeValueType.rating,
-                      selected: selectedType,
-                      onTap: (t) => setState(() => selectedType = t),
+                      "Rating",
+                      CupertinoIcons.star_fill,
+                      AttributeValueType.rating,
+                      selectedType,
+                      (t) => setState(() => selectedType = t),
                     ),
                   ],
                 ),
@@ -133,14 +106,13 @@ Future<void> showAddAttributeDialog(
   );
 }
 
-// --- HELPER WIDGET FOR SELECTION (Matching Tag Dialog Style) ---
-Widget _buildTypeOption({
-  required String label,
-  required IconData icon,
-  required AttributeValueType type,
-  required AttributeValueType selected,
-  required Function(AttributeValueType) onTap,
-}) {
+Widget _buildTypeOption(
+  String label,
+  IconData icon,
+  AttributeValueType type,
+  AttributeValueType selected,
+  Function(AttributeValueType) onTap,
+) {
   final isSelected = type == selected;
   return GestureDetector(
     onTap: () => onTap(type),
@@ -148,13 +120,8 @@ Widget _buildTypeOption({
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isSelected
-            ? CupertinoColors.systemGrey5
-            : Colors
-                  .transparent, // Like the 'Group' chooser in Tag Dialog (unselected transparent)
+        color: isSelected ? CupertinoColors.systemGrey5 : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        // Optional: Add border if you want it exactly like the "None" button,
-        // but often categories in that dialog just use background color.
         border: isSelected ? Border.all(color: Colors.black12) : null,
       ),
       child: Row(
@@ -167,9 +134,7 @@ Widget _buildTypeOption({
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              fontFamily: '.SF Pro Text',
-              fontSize: 14,
+            style: AppTextStyles.bodySmall.copyWith(
               color: isSelected ? Colors.black : Colors.black87,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
@@ -180,7 +145,6 @@ Widget _buildTypeOption({
   );
 }
 
-// --- MANAGE ATTRIBUTE ---
 Future<void> showAttributeOptionsDialog(
   BuildContext context,
   StorageService storage,
@@ -210,29 +174,14 @@ Future<void> showAttributeOptionsDialog(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Name",
-            style: TextStyle(
-              fontFamily: '.SF Pro Text',
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-              color: Colors.black,
-            ),
-          ),
+          const Text("Name", style: AppTextStyles.label),
           const SizedBox(height: 8),
           CupertinoTextField(
             controller: controller,
             placeholder: "Attribute Name",
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            style: const TextStyle(
-              fontFamily: '.SF Pro Text',
-              fontSize: 16,
-              color: Colors.black,
-            ),
+            decoration: AppDecorations.input,
+            style: AppTextStyles.body,
           ),
           const SizedBox(height: 32),
           DeleteTriggerButton(
@@ -246,14 +195,11 @@ Future<void> showAttributeOptionsDialog(
                 subtitle: "This will remove this data field from all entries.",
                 onConfirm: () async {
                   await storage.deleteCustomAttribute(attribute.key);
-
-                  // Cleanup Folders (remove deleted key from active/visible lists)
                   final allFolders = storage.getAllFolders();
                   for (var folder in allFolders) {
                     bool changed = false;
                     List<String> visible = List.from(folder.visibleAttributes);
                     List<String> active = List.from(folder.activeAttributes);
-
                     if (visible.contains(attribute.key)) {
                       visible.remove(attribute.key);
                       changed = true;
@@ -262,7 +208,6 @@ Future<void> showAttributeOptionsDialog(
                       active.remove(attribute.key);
                       changed = true;
                     }
-
                     if (changed) {
                       folder.setVisibleAttributes(visible);
                       folder.setActiveAttributes(active);
