@@ -14,15 +14,29 @@ Future<void> showAddEntryDialog(
   StorageService storage,
   VoidCallback onUpdate, {
   List<String>? prefillTags,
-  List<String>? restrictToAttributes,
+  AppFolder? folderContext, // NEW: Context to know which order to use
 }) {
+  // If we are in a folder, use its active attributes (which respect its sort order)
+  // If from Home (folderContext is null), use the Master Sort Order from storage
+  List<String>? attributeOrder;
+
+  if (folderContext != null) {
+    attributeOrder = folderContext.activeAttributes;
+  } else {
+    // Fetch master order from storage logic
+    attributeOrder = storage
+        .getSortedAttributeDefinitions()
+        .map((a) => a.key)
+        .toList();
+  }
+
   return _showEntryDialog(
     context: context,
     storage: storage,
     onUpdate: onUpdate,
     entryToEdit: null,
     prefillTags: prefillTags,
-    activeAttributeKeys: restrictToAttributes,
+    activeAttributeKeys: attributeOrder, // Pass the resolved order
   );
 }
 
@@ -33,12 +47,17 @@ Future<void> showEditEntryDialog(
   StorageService storage,
   VoidCallback onUpdate,
 ) {
+  // Edit mode always respects the folder it was opened from
+  // If opened from a "Global" search context where folder might be unknown,
+  // you might need to fallback, but typically edit happens in context.
+  // Using folder.visibleAttributes or activeAttributes preserves the folder's custom view.
   return _showEntryDialog(
     context: context,
     storage: storage,
     onUpdate: onUpdate,
     entryToEdit: entry,
-    activeAttributeKeys: folder.visibleAttributes,
+    activeAttributeKeys: folder
+        .activeAttributes, // Use active to show all editable fields in correct order
   );
 }
 
@@ -69,22 +88,24 @@ Future<void> _showEntryDialog({
   final allDefs = getEntryAttributes(customAttrs);
   final defMap = {for (var d in allDefs) d.key: d};
 
-  // 3. Determine Field Order & Visibility
+  // 3. Determine Field Order & Visibility based on the keys passed in
   List<AttributeDefinition> formAttributes = [];
   const hiddenKeys = ['dateCreated', 'dateEdited', 'lastAddedTo'];
 
   if (activeAttributeKeys != null) {
     for (var key in activeAttributeKeys) {
+      // Only add if it exists in definitions and isn't a hidden system key
       if (defMap.containsKey(key) && !hiddenKeys.contains(key)) {
         formAttributes.add(defMap[key]!);
       }
     }
-    // Ensure 'tag' is present if not explicitly in the list
+    // Safety Fallback: Ensure 'tag' is present if somehow missed
     if (!formAttributes.any((d) => d.key == 'tag') &&
         defMap.containsKey('tag')) {
       formAttributes.add(defMap['tag']!);
     }
   } else {
+    // Fallback if no keys provided (shouldn't happen with new logic, but safe)
     formAttributes = allDefs.where((d) => !hiddenKeys.contains(d.key)).toList();
   }
 
@@ -279,22 +300,32 @@ Widget _buildFlatFormSection({
             }).toList(),
           ),
       ] else if (def.type == AttributeValueType.date) ...[
-        // -- DATE --
-        Container(
-          height: 150,
-          decoration: BoxDecoration(
-            color: CupertinoColors.systemGrey6,
-            borderRadius: BorderRadius.circular(8),
+        // -- CALENDAR VIEW DATE PICKER --
+        Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.black, // Color of selected day
+              onPrimary: Colors.white, // Text color of selected day
+              onSurface: Colors.black, // Default text color
+            ),
           ),
-          child: CupertinoDatePicker(
-            mode: CupertinoDatePickerMode.date,
-            initialDateTime:
-                DateTime.tryParse(formValues[def.key]?.toString() ?? '') ??
-                DateTime.now(),
-            onDateTimeChanged: (picked) {
-              formValues[def.key] = picked.toIso8601String();
-              onStateChange();
-            },
+          child: Container(
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemGrey6,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: CalendarDatePicker(
+              initialDate:
+                  DateTime.tryParse(formValues[def.key]?.toString() ?? '') ??
+                  DateTime.now(),
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+              onDateChanged: (picked) {
+                formValues[def.key] = picked.toIso8601String();
+                onStateChange();
+              },
+            ),
           ),
         ),
       ] else if (def.type == AttributeValueType.rating) ...[
@@ -304,7 +335,6 @@ Widget _buildFlatFormSection({
             final rating = (formValues[def.key] ?? 0) as int;
             return GestureDetector(
               onTap: () {
-                // Toggle: If clicking same value, reset to 0
                 formValues[def.key] = (rating == index + 1) ? 0 : index + 1;
                 onStateChange();
               },
@@ -329,7 +359,6 @@ Widget _buildFlatFormSection({
               ? "Paste image URL"
               : "Enter ${def.label.toLowerCase()}...",
           padding: const EdgeInsets.all(12),
-          // Dynamic multiline check for any field named "notes"
           maxLines: def.label.toLowerCase().contains('note') ? 4 : 1,
           keyboardType: def.type == AttributeValueType.number
               ? const TextInputType.numberWithOptions(decimal: true)

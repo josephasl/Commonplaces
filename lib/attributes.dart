@@ -38,22 +38,8 @@ class AttributeDefinition {
 }
 
 // 1. HARDCODED SYSTEM ATTRIBUTES
-// Removed 'notes' and 'starRating'. Defaults are now title, tag, image, dates.
+// REMOVED: 'title' and 'image' are no longer system attributes.
 const Map<String, AttributeDefinition> _systemAttributes = {
-  "image": AttributeDefinition(
-    key: "image",
-    label: "Image",
-    type: AttributeValueType.image,
-    applyType: AttributeApplyType.both,
-    isSystemField: true,
-  ),
-  "title": AttributeDefinition(
-    key: "title",
-    label: "Title",
-    type: AttributeValueType.text,
-    applyType: AttributeApplyType.entriesOnly,
-    isSystemField: true,
-  ),
   "tag": AttributeDefinition(
     key: "tag",
     label: "Tag",
@@ -99,7 +85,6 @@ const Map<String, AttributeDefinition> _systemAttributes = {
 };
 
 // 2. REGISTRY ACCESSOR
-// This merges system attributes with any list passed to it (from storage)
 Map<String, AttributeDefinition> getAttributeRegistry(
   List<AttributeDefinition> customAttributes,
 ) {

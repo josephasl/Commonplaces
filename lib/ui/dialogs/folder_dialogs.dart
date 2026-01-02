@@ -1,11 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:reorderables/reorderables.dart';
+import 'package:reorderables/reorderables.dart'; // Assuming this is unused based on usage of ReorderableListView.builder
 import '../../storage_service.dart';
 import '../../models.dart';
 import '../../attributes.dart';
 import '../widgets/base_bottom_sheet.dart';
-import '../widgets/attribute_selector.dart';
 import '../widgets/delete_trigger_button.dart';
 import 'confirm_dialog.dart';
 import 'tag_dialogs.dart';
@@ -56,25 +55,54 @@ Future<void> _showFolderDialog({
   return showCupertinoModalPopup(
     context: context,
     builder: (context) {
+      // 1. Setup Tags
       List<String> availableTags = List.from(storage.getGlobalTags());
       List<String> selectedTags = isEditMode
           ? List.from(folderToEdit!.displayTags)
           : [];
 
-      // Removed 'notes' from default defaults.
-      List<String> visibleAttributes = isEditMode
-          ? List.from(folderToEdit!.visibleAttributes)
-          : ['title', 'tag'];
+      // 2. Setup Attributes with Default Sort Order
+      final allDefinitions = storage.getSortedAttributeDefinitions();
 
-      final customAttrs = storage.getCustomAttributes();
-      final allEntryAttrs = getEntryAttributes(customAttrs);
+      // Initialize the toggle states locally
+      final Set<String> activeSet = isEditMode
+          ? Set.from(folderToEdit!.activeAttributes)
+          : {'tag'};
+
+      final Set<String> visibleSet = isEditMode
+          ? Set.from(folderToEdit!.visibleAttributes)
+          : {'tag'};
+
+      // 3. Initialize Sorting Order for THIS specific folder
+      List<AttributeDefinition> sortedAttributes = List.from(allDefinitions);
+
+      if (isEditMode && folderToEdit!.activeAttributes.isNotEmpty) {
+        final orderMap = {
+          for (var i = 0; i < folderToEdit!.activeAttributes.length; i++)
+            folderToEdit!.activeAttributes[i]: i,
+        };
+
+        sortedAttributes.sort((a, b) {
+          final indexA = orderMap[a.key] ?? 9999;
+          final indexB = orderMap[b.key] ?? 9999;
+          return indexA.compareTo(indexB);
+        });
+      }
 
       return StatefulBuilder(
         builder: (context, setState) {
-          void _onReorder(int oldIndex, int newIndex) {
+          void _onTagReorder(int oldIndex, int newIndex) {
             setState(() {
               final String item = availableTags.removeAt(oldIndex);
               availableTags.insert(newIndex, item);
+            });
+          }
+
+          void _onAttrReorder(int oldIndex, int newIndex) {
+            setState(() {
+              if (oldIndex < newIndex) newIndex -= 1;
+              final item = sortedAttributes.removeAt(oldIndex);
+              sortedAttributes.insert(newIndex, item);
             });
           }
 
@@ -88,7 +116,22 @@ Future<void> _showFolderDialog({
 
                 folder.setAttribute('title', titleController.text);
                 folder.setAttribute('displayTags', selectedTags);
-                folder.setVisibleAttributes(visibleAttributes);
+
+                // Reconstruct lists based on the NEW visual order
+                List<String> newActiveList = [];
+                List<String> newVisibleList = [];
+
+                for (var def in sortedAttributes) {
+                  if (activeSet.contains(def.key)) {
+                    newActiveList.add(def.key);
+                  }
+                  if (visibleSet.contains(def.key)) {
+                    newVisibleList.add(def.key);
+                  }
+                }
+
+                folder.setActiveAttributes(newActiveList);
+                folder.setVisibleAttributes(newVisibleList);
 
                 await storage.saveFolder(folder);
                 onUpdate();
@@ -125,43 +168,27 @@ Future<void> _showFolderDialog({
 
                 const SizedBox(height: 24),
 
-                // --- HEADER ---
+                // --- TAGS SECTION ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Filter by Tags",
-                          style: TextStyle(
-                            fontFamily: '.SF Pro Text',
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      "Filter by Tags",
+                      style: TextStyle(
+                        fontFamily: '.SF Pro Text',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.black,
+                      ),
                     ),
-
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       minSize: 0,
-                      child: const Row(
-                        children: [
-                          Icon(CupertinoIcons.add, size: 16),
-                          SizedBox(width: 4),
-                          Text(
-                            "New Tag",
-                            style: TextStyle(
-                              fontFamily: '.SF Pro Text',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                      child: const Text(
+                        "New Tag",
+                        style: TextStyle(fontSize: 14),
                       ),
                       onPressed: () async {
                         final newTag = await showAddTagDialog(
@@ -169,7 +196,6 @@ Future<void> _showFolderDialog({
                           storage,
                           onUpdate,
                         );
-
                         if (newTag != null && newTag.isNotEmpty) {
                           setState(() {
                             if (!availableTags.contains(newTag)) {
@@ -183,32 +209,24 @@ Future<void> _showFolderDialog({
                   ],
                 ),
                 const SizedBox(height: 12),
-
                 if (availableTags.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Text(
-                        "No tags available",
-                        style: TextStyle(
-                          fontFamily: '.SF Pro Text',
-                          color: CupertinoColors.systemGrey,
-                          fontSize: 13,
-                        ),
-                      ),
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "No tags available",
+                      style: TextStyle(color: Colors.grey),
                     ),
                   )
                 else
                   ReorderableWrap(
                     spacing: 8.0,
                     runSpacing: 8.0,
-                    padding: const EdgeInsets.all(0),
+                    padding: EdgeInsets.zero,
                     needsLongPressDraggable: true,
-                    onReorder: _onReorder,
+                    onReorder: _onTagReorder,
                     children: availableTags.map((tag) {
                       final isSelected = selectedTags.contains(tag);
                       final catColor = storage.getTagColor(tag);
-
                       return GestureDetector(
                         key: ValueKey(tag),
                         onTap: () => setState(
@@ -230,32 +248,15 @@ Future<void> _showFolderDialog({
                                 ? Border.all(color: catColor)
                                 : null,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "#$tag",
-                                style: TextStyle(
-                                  fontFamily: '.SF Pro Text',
-                                  fontSize: 12,
-                                  color: isSelected
-                                      ? Colors.black
-                                      : Colors.black,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w500
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              // --- Drag Handle Icon ---
-                              Icon(
-                                CupertinoIcons.bars,
-                                size: 14,
-                                color: isSelected
-                                    ? Colors.black.withOpacity(0.5)
-                                    : CupertinoColors.systemGrey2,
-                              ),
-                            ],
+                          child: Text(
+                            "#$tag",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black,
+                              fontWeight: isSelected
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
                           ),
                         ),
                       );
@@ -263,20 +264,171 @@ Future<void> _showFolderDialog({
                   ),
 
                 const SizedBox(height: 24),
-                const Text(
-                  "Active Attributes",
-                  style: TextStyle(
-                    fontFamily: '.SF Pro Text',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: Colors.black,
-                  ),
+
+                // --- ATTRIBUTES HEADER ---
+                const Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Attributes",
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                AttributeSelector(
-                  initialSelection: visibleAttributes,
-                  availableAttributes: allEntryAttrs,
-                  onChanged: (list) => visibleAttributes = list,
+
+                // --- REORDERABLE ATTRIBUTE LIST ---
+                // FIX: Removed outer Container color.
+                // Using ReorderableListView directly with custom item styling.
+                SizedBox(
+                  height: 300, // Constrain height inside bottom sheet
+                  child: Theme(
+                    data: ThemeData(
+                      canvasColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                    ),
+                    child: ReorderableListView.builder(
+                      physics:
+                          const ClampingScrollPhysics(), // Scrollable if list is long
+                      itemCount: sortedAttributes.length,
+                      onReorder: _onAttrReorder,
+                      // FIX: Added Proxy Decorator for drag effect
+                      proxyDecorator: (child, index, animation) {
+                        return Material(
+                          elevation: 4,
+                          color: Colors.transparent,
+                          shadowColor: Colors.black26,
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        final def = sortedAttributes[index];
+                        final attrKey = def.key;
+
+                        final isActive = activeSet.contains(attrKey);
+                        final isVisible = visibleSet.contains(attrKey);
+                        final isMandatory = attrKey == 'tag';
+                        final isLast = index == sortedAttributes.length - 1;
+
+                        return Container(
+                          key: ValueKey(attrKey),
+                          // FIX: Added white background and rounded corners logic
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(
+                              top: index == 0
+                                  ? const Radius.circular(10)
+                                  : Radius.zero,
+                              bottom: isLast
+                                  ? const Radius.circular(10)
+                                  : Radius.zero,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8, // Increased padding
+                                  horizontal: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // 1. BURGER (Drag Handle) - LEFT
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(
+                                          left: 4,
+                                          right: 12,
+                                        ),
+                                        child: Icon(
+                                          Icons.menu,
+                                          color: Colors.grey,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+
+                                    // 2. ATTRIBUTE NAME - CENTER
+                                    Expanded(
+                                      child: Text(
+                                        def.label,
+                                        style: TextStyle(
+                                          fontSize: 14, // Matched font size
+                                          color: isActive
+                                              ? Colors.black
+                                              : Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+
+                                    // 3. SQUARE TICKBOX (Active) - RIGHT
+                                    CupertinoCheckbox(
+                                      value: isActive,
+                                      activeColor: CupertinoColors.activeBlue,
+                                      onChanged: isMandatory
+                                          ? null
+                                          : (val) {
+                                              setState(() {
+                                                if (val == true) {
+                                                  activeSet.add(attrKey);
+                                                  visibleSet.add(attrKey);
+                                                } else {
+                                                  activeSet.remove(attrKey);
+                                                  visibleSet.remove(attrKey);
+                                                }
+                                              });
+                                            },
+                                    ),
+
+                                    const SizedBox(width: 4),
+
+                                    // 4. EYE ICON (Visible) - RIGHT
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: (!isActive)
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                if (isVisible) {
+                                                  visibleSet.remove(attrKey);
+                                                } else {
+                                                  visibleSet.add(attrKey);
+                                                }
+                                              });
+                                            },
+                                      child: Icon(
+                                        isVisible
+                                            ? CupertinoIcons.eye_solid
+                                            : CupertinoIcons.eye_slash,
+                                        color: isActive
+                                            ? (isVisible
+                                                  ? CupertinoColors.activeBlue
+                                                  : Colors.grey)
+                                            : Colors.grey.withOpacity(0.3),
+                                        size: 20,
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 4),
+                                  ],
+                                ),
+                              ),
+                              // FIX: Added Divider logic
+                              if (!isLast)
+                                const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  indent: 44, // Align with text start
+                                  color: Color(0xFFF0F0F0),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
 
                 if (isEditMode) ...[

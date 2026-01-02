@@ -29,6 +29,9 @@ class _EntryScreenState extends State<EntryScreen> {
   late PageController _pageController;
   late int _currentIndex;
 
+  // Lock to prevent multiple triggers during one swipe
+  bool _isSwitchingPage = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +43,28 @@ class _EntryScreenState extends State<EntryScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _goToNextPage() {
+    if (_isSwitchingPage || _currentIndex >= widget.entries.length - 1) return;
+    _isSwitchingPage = true;
+    _pageController
+        .nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        )
+        .then((_) => _isSwitchingPage = false);
+  }
+
+  void _goToPreviousPage() {
+    if (_isSwitchingPage || _currentIndex <= 0) return;
+    _isSwitchingPage = true;
+    _pageController
+        .previousPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        )
+        .then((_) => _isSwitchingPage = false);
   }
 
   @override
@@ -140,37 +165,54 @@ class _EntryScreenState extends State<EntryScreen> {
                     tag: 'entry_hero_${entry.id}',
                     child: Material(
                       color: Colors.white,
-                      child: SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ...visibleKeys.map((key) {
-                              final definition = registry[key];
-                              if (definition == null)
-                                return const SizedBox.shrink();
+                      // Listen to scroll updates to detect the "Bounce" distance
+                      child: NotificationListener<ScrollUpdateNotification>(
+                        onNotification: (notification) {
+                          const double threshold = 60.0;
+                          final metrics = notification.metrics;
 
-                              final value = entry.getAttribute(key);
-                              final bool isEmpty =
-                                  value == null || value.toString().isEmpty;
+                          if (notification.dragDetails == null) return false;
 
-                              if (isEmpty &&
-                                  definition.type != AttributeValueType.image) {
-                                return const SizedBox.shrink();
-                              }
+                          if (metrics.pixels < -threshold) {
+                            _goToPreviousPage();
+                          } else if (metrics.pixels >
+                              metrics.maxScrollExtent + threshold) {
+                            _goToNextPage();
+                          }
+                          return false;
+                        },
+                        // Removed Center widget to allow top alignment
+                        child: SizedBox.expand(
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ...visibleKeys.map((key) {
+                                  final definition = registry[key];
+                                  if (definition == null)
+                                    return const SizedBox.shrink();
 
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 24.0),
-                                child: _buildAttributeDisplay(
-                                  definition,
-                                  value,
-                                  widget.storage,
-                                ),
-                              );
-                            }).toList(),
-                            const SizedBox(height: 80),
-                          ],
+                                  final value = entry.getAttribute(key);
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: 24.0,
+                                    ),
+                                    child: _buildAttributeDisplay(
+                                      definition,
+                                      value,
+                                      widget.storage,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -186,12 +228,18 @@ class _EntryScreenState extends State<EntryScreen> {
     dynamic value,
     StorageService storage,
   ) {
+    final bool isEmpty =
+        value == null ||
+        value.toString().isEmpty ||
+        (value is List && value.isEmpty);
+
+    // 1. IMAGE
     if (def.type == AttributeValueType.image) {
-      final bool hasUrl = value != null && value.toString().isNotEmpty;
+      final bool hasUrl = !isEmpty;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildLabel(def.label),
+          // REMOVED LABEL FOR IMAGE
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: hasUrl
@@ -207,68 +255,112 @@ class _EntryScreenState extends State<EntryScreen> {
       );
     }
 
-    // RATING DISPLAY
+    // 2. RATING
     if (def.type == AttributeValueType.rating) {
-      final rating = (value is int)
+      final rating = (!isEmpty && value is int)
           ? value
-          : int.tryParse(value.toString()) ?? 0;
+          : (int.tryParse(value.toString()) ?? 0);
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildLabel(def.label),
-          Row(
-            children: List.generate(5, (index) {
-              return Icon(
-                index < rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
-                color: CupertinoColors.systemYellow,
-                size: 24,
-              );
-            }),
-          ),
+          isEmpty
+              ? const Text("-", style: TextStyle(fontSize: 16))
+              : Row(
+                  children: List.generate(5, (index) {
+                    return Icon(
+                      index < rating
+                          ? CupertinoIcons.star_fill
+                          : CupertinoIcons.star,
+                      color: CupertinoColors.systemYellow,
+                      size: 24,
+                    );
+                  }),
+                ),
         ],
       );
     }
 
+    // 3. TAGS
     if (def.key == 'tag') {
-      List<String> tags = (value is List)
-          ? value.map((e) => e.toString()).toList()
-          : [value.toString()];
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildLabel(def.label),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: tags.map((t) {
-              final color = storage.getTagColor(t);
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  "#$t",
-                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
-                ),
-              );
-            }).toList(),
+          if (isEmpty)
+            const Text("-", style: TextStyle(fontSize: 16))
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  ((value is List)
+                          ? value.map((e) => e.toString()).toList()
+                          : [value.toString()])
+                      .map((t) {
+                        final color = storage.getTagColor(t);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "#$t",
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      })
+                      .toList(),
+            ),
+        ],
+      );
+    }
+
+    // 4. DATE
+    if (def.type == AttributeValueType.date) {
+      String dateStr = "-";
+      if (!isEmpty) {
+        DateTime? d;
+        if (value is DateTime)
+          d = value;
+        else if (value is String)
+          d = DateTime.tryParse(value);
+
+        if (d != null) {
+          dateStr =
+              "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+        } else {
+          dateStr = value.toString();
+        }
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLabel(def.label),
+          Text(
+            dateStr,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.normal),
           ),
         ],
       );
     }
 
-    // DEFAULT TEXT DISPLAY (Handles Dates too for now as raw strings)
+    // 5. DEFAULT TEXT
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (def.key != 'title') _buildLabel(def.label),
         Text(
-          value.toString(),
+          isEmpty ? "-" : value.toString(),
           style: TextStyle(
             fontSize: def.key == 'title' ? 24 : 16,
             fontWeight: def.key == 'title'

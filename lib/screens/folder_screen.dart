@@ -52,10 +52,10 @@ class FolderScreenState extends State<FolderScreen> {
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
     }
-    // Set default sort
-    if (!widget.folder.visibleAttributes.contains('dateCreated') &&
-        widget.folder.visibleAttributes.isNotEmpty) {
-      _sortAttributeKey = widget.folder.visibleAttributes.first;
+    // Check ACTIVE attributes for sorting
+    if (!widget.folder.activeAttributes.contains('dateCreated') &&
+        widget.folder.activeAttributes.isNotEmpty) {
+      _sortAttributeKey = widget.folder.activeAttributes.first;
       _isAscending = true;
     }
     refresh();
@@ -122,20 +122,17 @@ class FolderScreenState extends State<FolderScreen> {
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
 
-    final List<String> sortableKeys = List.from(
-      widget.folder.visibleAttributes,
-    );
+    // Use ACTIVE attributes for sorting
+    final List<String> sortableKeys = List.from(widget.folder.activeAttributes);
 
     // 1. AWAIT the user's selection
     final String? selectedKey = await showCupertinoModalPopup<String>(
       context: context,
-      // Use 'ctx' for the dialog context to ensure we pop ONLY the dialog
       builder: (ctx) => CupertinoActionSheet(
         title: const Text("Sort Entries By"),
         message: const Text("Tap again to toggle order"),
         actions: sortableKeys.map((key) {
           final def = registry[key];
-          // Use 'Container()' or exclude via where() if null to avoid crash
           if (def == null) return Container();
 
           final isSelected = _sortAttributeKey == key;
@@ -150,7 +147,6 @@ class FolderScreenState extends State<FolderScreen> {
 
           return CupertinoActionSheetAction(
             onPressed: () {
-              // 2. Return the KEY, do not setState here
               Navigator.of(ctx).pop(key);
             },
             child: Row(
@@ -249,7 +245,6 @@ class FolderScreenState extends State<FolderScreen> {
 
       int result = 0;
 
-      // Handle nulls first to avoid crashes
       if (valA == null && valB == null) return 0;
       if (valA == null) return _isAscending ? -1 : 1;
       if (valB == null) return _isAscending ? 1 : -1;
@@ -276,6 +271,7 @@ class FolderScreenState extends State<FolderScreen> {
       return _isAscending ? result : -result;
     });
 
+    // Use VISIBLE attributes for the Card Preview
     final visibleAttrs = widget.folder.visibleAttributes;
 
     return Listener(
@@ -538,7 +534,8 @@ class FolderScreenState extends State<FolderScreen> {
                         widget.storage,
                         refresh,
                         prefillTags: prefillTags,
-                        restrictToAttributes: widget.folder.visibleAttributes,
+                        // Use ACTIVE attributes for the Form
+                        folderContext: widget.folder,
                       );
                       refresh();
                     },

@@ -19,15 +19,19 @@ class StorageService {
 
   static const String _defaultCategoryId = 'default_grey_cat';
   static const String _customAttributesKey = 'custom_attributes';
+  static const String _attributeSortOrderKey = 'attribute_sort_order';
 
   static const String _manageLibraryTabIndexKey = 'manage_library_tab_index';
+  static const String _hasSeededDefaultsKey = 'has_seeded_defaults';
 
   Future<void> init() async {
     await Hive.initFlutter();
     await Hive.openBox(_entriesBoxName);
     await Hive.openBox(_foldersBoxName);
     await Hive.openBox(_settingsBoxName);
+
     _ensureDefaultCategory();
+    await _ensureDefaultAttributes();
   }
 
   void _ensureDefaultCategory() {
@@ -38,13 +42,68 @@ class StorageService {
         name: 'Uncategorized',
         colorIndex: 0,
         iconIndex: 0,
-        sortOrder: 9999, // Put at bottom by default
+        sortOrder: 9999,
       );
       saveTagCategory(defaultCat);
     }
   }
 
-  // --- UPDATED: Return sorted list ---
+  // --- NEW: Create Default Custom Attributes & Set Order ---
+  Future<void> _ensureDefaultAttributes() async {
+    final bool hasSeeded = _settingsBox.get(
+      _hasSeededDefaultsKey,
+      defaultValue: false,
+    );
+
+    if (!hasSeeded) {
+      // Only create if list is empty to avoid duplicates on re-install scenarios
+      if (getCustomAttributes().isEmpty) {
+        final titleAttr = AttributeDefinition(
+          key: 'title_default',
+          label: 'Title',
+          type: AttributeValueType.text,
+          applyType: AttributeApplyType.entriesOnly,
+        );
+
+        final notesAttr = AttributeDefinition(
+          key: 'notes_default',
+          label: 'Notes',
+          type: AttributeValueType.text,
+          applyType: AttributeApplyType.entriesOnly,
+        );
+
+        final imageAttr = AttributeDefinition(
+          key: 'image_default',
+          label: 'Image',
+          type: AttributeValueType.image,
+          applyType: AttributeApplyType.entriesOnly,
+        );
+
+        // Add them to storage
+        await addCustomAttribute(titleAttr);
+        await addCustomAttribute(notesAttr);
+        await addCustomAttribute(imageAttr);
+
+        // FORCE SPECIFIC DEFAULT ORDER
+        // Image -> Title -> Notes -> Tag -> Date Edited -> Date Created
+        final defaultOrder = [
+          'image_default',
+          'title_default',
+          'notes_default',
+          'tag',
+          'dateEdited',
+          'dateCreated',
+        ];
+        await saveAttributeSortOrder(defaultOrder);
+      }
+
+      // Mark as seeded so we don't overwrite user changes later
+      await _settingsBox.put(_hasSeededDefaultsKey, true);
+    }
+  }
+
+  // ... [Rest of the file remains standard] ...
+
   List<TagCategory> getTagCategories() {
     final raw = _settingsBox.get(_tagCategoriesKey, defaultValue: []);
     if (raw is List) {
@@ -58,8 +117,6 @@ class StorageService {
           })
           .whereType<TagCategory>()
           .toList();
-
-      // Sort by sortOrder
       list.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       return list;
     }
@@ -71,18 +128,12 @@ class StorageService {
     if (cleanName.isNotEmpty) {
       cleanName = "${cleanName[0].toUpperCase()}${cleanName.substring(1)}";
     }
-
-    // Get existing categories to determine sort order if new
     final cats = getTagCategories();
     final index = cats.indexWhere((c) => c.id == cat.id);
-
-    // Preserve existing sort order if updating, else put at end
     int order = cat.sortOrder;
     if (index == -1 && order == 0) {
-      // New Item: Set order to last
       order = cats.isNotEmpty ? (cats.last.sortOrder + 1) : 0;
     }
-
     final formattedCat = TagCategory(
       id: cat.id,
       name: cleanName,
@@ -90,33 +141,23 @@ class StorageService {
       iconIndex: cat.iconIndex,
       sortOrder: order,
     );
-
     if (index >= 0) {
       cats[index] = formattedCat;
     } else {
       cats.add(formattedCat);
     }
-
-    // Sort before saving just in case
     cats.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-
     await _settingsBox.put(
       _tagCategoriesKey,
       cats.map((e) => e.toJson()).toList(),
     );
   }
 
-  // --- NEW: REORDER LOGIC ---
   Future<void> reorderTagCategories(int oldIndex, int newIndex) async {
     final cats = getTagCategories();
-
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
+    if (oldIndex < newIndex) newIndex -= 1;
     final item = cats.removeAt(oldIndex);
     cats.insert(newIndex, item);
-
-    // Update sortOrder for ALL items to match new index
     final updatedCats = <TagCategory>[];
     for (int i = 0; i < cats.length; i++) {
       final c = cats[i];
@@ -126,11 +167,10 @@ class StorageService {
           name: c.name,
           colorIndex: c.colorIndex,
           iconIndex: c.iconIndex,
-          sortOrder: i, // Reset order based on list position
+          sortOrder: i,
         ),
       );
     }
-
     await _settingsBox.put(
       _tagCategoriesKey,
       updatedCats.map((e) => e.toJson()).toList(),
@@ -145,7 +185,6 @@ class StorageService {
       _tagCategoriesKey,
       cats.map((e) => e.toJson()).toList(),
     );
-
     final mapping = getTagMapping();
     final keysToReset = mapping.entries
         .where((e) => e.value == catId)
@@ -157,7 +196,6 @@ class StorageService {
     await _settingsBox.put(_tagMappingKey, mapping);
   }
 
-  // ... [getTagColor, getTagMapping, setTagCategory etc. remain EXACTLY as they were in the previous working version] ...
   Map<String, String> getTagMapping() {
     final raw = _settingsBox.get(_tagMappingKey, defaultValue: {});
     return Map<String, String>.from(raw);
@@ -186,10 +224,8 @@ class StorageService {
     return AppConstants.categoryColors[idx];
   }
 
-  // --- NEW METHODS FOR TAB PERSISTENCE ---
   int getManageLibraryTabIndex() {
     final val = _settingsBox.get(_manageLibraryTabIndexKey, defaultValue: 0);
-    // Safety check to ensure index is valid (we only have 2 tabs: 0 and 1)
     if (val is int && val >= 0 && val <= 1) return val;
     return 0;
   }
@@ -198,7 +234,6 @@ class StorageService {
     await _settingsBox.put(_manageLibraryTabIndexKey, index);
   }
 
-  // ... [Standard Operations: Box getters, getAllEntries, etc. Copy from previous stable file if needed] ...
   Box get _entriesBox => Hive.box(_entriesBoxName);
   Box get _foldersBox => Hive.box(_foldersBoxName);
   Box get _settingsBox => Hive.box(_settingsBoxName);
@@ -298,20 +333,15 @@ class StorageService {
     }
   }
 
-  // In lib/storage_service.dart
-
   Future<void> removeGlobalTag(String tag) async {
-    // 1. Remove from Global List
     final currentTags = getGlobalTags();
     currentTags.remove(tag);
     await _settingsBox.put(_globalTagsKey, currentTags);
 
-    // 2. Remove from Category Mapping
     final mapping = getTagMapping();
     mapping.remove(tag);
     await _settingsBox.put(_tagMappingKey, mapping);
 
-    // 3. Remove from Folders (FIXED: This was missing)
     final allFolders = getAllFolders();
     for (var f in allFolders) {
       final List<String> tags = List.from(f.displayTags);
@@ -322,7 +352,6 @@ class StorageService {
       }
     }
 
-    // 4. Remove from Entries (FIXED: This was missing)
     final allEntries = getAllEntries();
     for (var e in allEntries) {
       final rawVal = e.getAttribute('tag');
@@ -332,7 +361,7 @@ class StorageService {
 
       if (tags.contains(tag)) {
         tags.remove(tag);
-        e.setAttribute('tag', tags); // Save empty list or reduced list
+        e.setAttribute('tag', tags);
         await saveEntry(e);
       }
     }
@@ -340,31 +369,22 @@ class StorageService {
 
   Future<void> renameGlobalTag(String oldTag, String newTag) async {
     if (oldTag == newTag) return;
-
-    // 1. Update Folders (FIXED)
     final allFolders = getAllFolders();
     for (var f in allFolders) {
-      // Get a mutable copy of the tags
       final List<String> tags = List.from(f.displayTags);
-
       if (tags.contains(oldTag)) {
         final index = tags.indexOf(oldTag);
-        tags[index] = newTag; // Update the list
-
-        // CRITICAL: Write the updated list back to the folder attributes
+        tags[index] = newTag;
         f.setAttribute('displayTags', tags);
         await saveFolder(f);
       }
     }
-
-    // 2. Update Entries
     final allEntries = getAllEntries();
     for (var e in allEntries) {
       final rawVal = e.getAttribute('tag');
       List<String> tags = (rawVal is String)
           ? [rawVal]
           : (rawVal is List ? List<String>.from(rawVal) : []);
-
       if (tags.contains(oldTag)) {
         final index = tags.indexOf(oldTag);
         tags[index] = newTag;
@@ -372,14 +392,11 @@ class StorageService {
         await saveEntry(e);
       }
     }
-
-    // 3. Update Global List & Mappings
     final currentTags = getGlobalTags();
     if (currentTags.contains(oldTag)) {
       final index = currentTags.indexOf(oldTag);
-      currentTags[index] = newTag; // Update in place to preserve order
+      currentTags[index] = newTag;
       await _settingsBox.put(_globalTagsKey, currentTags);
-
       final mapping = getTagMapping();
       if (mapping.containsKey(oldTag)) {
         final catId = mapping[oldTag]!;
@@ -398,19 +415,6 @@ class StorageService {
       if (rawTag is List) return rawTag.isEmpty;
       return true;
     }).toList();
-  }
-
-  List<String> getExpandedEntryAttributes() {
-    final raw = _settingsBox.get(
-      _expandedEntryAttributesKey,
-      defaultValue: ['title', 'tag', 'dateCompleted'],
-    );
-    if (raw is List) return raw.map((e) => e.toString()).toList();
-    return ['title', 'tag', 'dateCompleted'];
-  }
-
-  Future<void> saveExpandedAttributes(List<String> keys) async {
-    await _settingsBox.put(_expandedEntryAttributesKey, keys);
   }
 
   List<AttributeDefinition> getCustomAttributes() {
@@ -432,22 +436,23 @@ class StorageService {
 
   Future<void> addCustomAttribute(AttributeDefinition attr) async {
     final list = getCustomAttributes();
-    // Prevent duplicates
     if (list.any((e) => e.key == attr.key)) return;
-
     list.add(attr);
     await _settingsBox.put(
       _customAttributesKey,
       list.map((e) => e.toJson()).toList(),
     );
+    // Append to sort order list
+    final currentOrder = getAttributeSortOrder();
+    currentOrder.add(attr.key);
+    await saveAttributeSortOrder(currentOrder);
   }
 
   Future<void> updateCustomAttribute(AttributeDefinition updatedAttr) async {
     final list = getCustomAttributes();
     final index = list.indexWhere((a) => a.key == updatedAttr.key);
-
     if (index != -1) {
-      list[index] = updatedAttr; // Replace with new version
+      list[index] = updatedAttr;
       await _settingsBox.put(
         _customAttributesKey,
         list.map((e) => e.toJson()).toList(),
@@ -462,5 +467,41 @@ class StorageService {
       _customAttributesKey,
       list.map((e) => e.toJson()).toList(),
     );
+    final currentOrder = getAttributeSortOrder();
+    currentOrder.remove(key);
+    await saveAttributeSortOrder(currentOrder);
+  }
+
+  List<String> getAttributeSortOrder() {
+    return _settingsBox
+            .get(_attributeSortOrderKey, defaultValue: <String>[])
+            ?.cast<String>() ??
+        [];
+  }
+
+  Future<void> saveAttributeSortOrder(List<String> keys) async {
+    await _settingsBox.put(_attributeSortOrderKey, keys);
+  }
+
+  List<AttributeDefinition> getSortedAttributeDefinitions() {
+    final customAttrs = getCustomAttributes();
+    final allDefs = getEntryAttributes(customAttrs);
+    final savedOrder = getAttributeSortOrder();
+
+    if (savedOrder.isEmpty) {
+      return allDefs;
+    }
+
+    final orderMap = {
+      for (var i = 0; i < savedOrder.length; i++) savedOrder[i]: i,
+    };
+
+    allDefs.sort((a, b) {
+      final indexA = orderMap[a.key] ?? 9999;
+      final indexB = orderMap[b.key] ?? 9999;
+      return indexA.compareTo(indexB);
+    });
+
+    return allDefs;
   }
 }

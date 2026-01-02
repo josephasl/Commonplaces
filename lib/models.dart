@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 // --- SHARED SORT OPTION ---
-// This was missing and is needed by HomeScreen
 enum SortOption {
   nameAsc,
   nameDesc,
@@ -113,14 +112,27 @@ class AppFolder {
     return [];
   }
 
+  // CONTROLS: Card Grid, Entry Screen
   List<String> get visibleAttributes {
     final raw = attributes['visibleAttributes'];
     if (raw is List) return raw.map((e) => e.toString()).toList();
-    return ['title', 'tag', 'notes'];
+    // Default: Just Tag and Notes (Title removed)
+    return ['tag', 'notes'];
+  }
+
+  // CONTROLS: Add/Edit Form, Sort Options
+  List<String> get activeAttributes {
+    final raw = attributes['activeAttributes'];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    // Default: Just Tag (Title removed)
+    return ['tag'];
   }
 
   void setVisibleAttributes(List<String> attrs) =>
       attributes['visibleAttributes'] = attrs;
+
+  void setActiveAttributes(List<String> attrs) =>
+      attributes['activeAttributes'] = attrs;
 
   dynamic getAttribute<T>(String key) => attributes[key];
   void setAttribute(String key, dynamic value) => attributes[key] = value;
