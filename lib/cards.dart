@@ -23,6 +23,8 @@ class EntryCard extends StatelessWidget {
     final keysToShow = visibleAttributes ?? ['title', 'tag', 'notes'];
 
     return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 60),
       decoration: AppDecorations.card,
       padding: const EdgeInsets.all(AppDimens.spacingM),
       child: Column(

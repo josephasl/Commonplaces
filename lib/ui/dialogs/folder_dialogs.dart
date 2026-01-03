@@ -53,7 +53,19 @@ Future<void> _showFolderDialog({
   return showCupertinoModalPopup(
     context: context,
     builder: (context) {
-      List<String> availableTags = List.from(storage.getGlobalTags());
+      final List<String> globalTags = storage.getGlobalTags();
+      List<String> availableTags;
+      if (isEditMode) {
+        availableTags = List.from(folderToEdit!.displayTags);
+        for (var tag in globalTags) {
+          if (!availableTags.contains(tag)) {
+            availableTags.add(tag);
+          }
+        }
+        availableTags.removeWhere((t) => !globalTags.contains(t));
+      } else {
+        availableTags = List.from(globalTags);
+      }
       List<String> selectedTags = isEditMode
           ? List.from(folderToEdit!.displayTags)
           : [];
@@ -96,13 +108,18 @@ Future<void> _showFolderDialog({
           }
 
           return BaseBottomSheet(
-            title: isEditMode ? "Edit Folder" : "New Folder",
+            title: isEditMode ? "Edit Commonplace" : "New Commonplace",
             onSave: () async {
               if (titleController.text.isNotEmpty) {
                 final folder = isEditMode
                     ? folderToEdit!
                     : storage.createNewFolder();
                 folder.setAttribute('title', titleController.text);
+                selectedTags.sort(
+                  (a, b) => availableTags
+                      .indexOf(a)
+                      .compareTo(availableTags.indexOf(b)),
+                );
                 folder.setAttribute('displayTags', selectedTags);
                 folder.setAttribute('iconIndex', selectedIconIndex);
                 List<String> newActiveList = [];
@@ -128,7 +145,7 @@ Future<void> _showFolderDialog({
                   onSelect: (i) => setState(() => selectedIconIndex = i),
                 ),
                 const SizedBox(height: AppDimens.spacingL),
-                const Text("Folder Name", style: AppTextStyles.label),
+                const Text("Name", style: AppTextStyles.label),
                 const SizedBox(height: 8),
                 CupertinoTextField(
                   controller: titleController,
@@ -142,28 +159,7 @@ Future<void> _showFolderDialog({
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    const Text("Filter by Tags", style: AppTextStyles.label),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minSize: 0,
-                      child: const Text("New Tag", style: AppTextStyles.body),
-                      onPressed: () async {
-                        final newTag = await showAddTagDialog(
-                          context,
-                          storage,
-                          onUpdate,
-                        );
-                        if (newTag != null && newTag.isNotEmpty) {
-                          setState(() {
-                            if (!availableTags.contains(newTag))
-                              availableTags.add(newTag);
-                            selectedTags.add(newTag);
-                          });
-                        }
-                      },
-                    ),
-                  ],
+                  children: [const Text("Stamps", style: AppTextStyles.label)],
                 ),
                 const SizedBox(height: 12),
                 if (availableTags.isEmpty)
@@ -209,17 +205,30 @@ Future<void> _showFolderDialog({
                                     color: AppColors.border.withOpacity(0.3),
                                   ),
                           ),
-                          child: Text(
-                            "#$tag",
-                            style: AppTextStyles.body.copyWith(
-                              color: isSelected
-                                  ? catColor
-                                  : Colors.grey.shade800,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              fontSize: 13,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                CupertinoIcons.bars,
+                                size: 14,
+                                color: isSelected
+                                    ? catColor
+                                    : Colors.grey.shade400,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                "#$tag",
+                                style: AppTextStyles.body.copyWith(
+                                  color: isSelected
+                                      ? catColor
+                                      : Colors.grey.shade800,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
