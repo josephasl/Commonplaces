@@ -4,6 +4,7 @@ import '../../storage_service.dart';
 import '../../models.dart';
 import '../ui/app_styles.dart';
 import '../dialogs.dart';
+import '../ui/widgets/common_ui.dart';
 
 class EditTagsScreen extends StatefulWidget {
   final StorageService storage;
@@ -69,13 +70,13 @@ class EditTagsScreenState extends State<EditTagsScreen> {
     }
 
     return Container(
-      color: AppColors.groupedBackground,
+      color: AppColors.coloredBackground,
       child: Stack(
         children: [
           ReorderableListView.builder(
             scrollController: _scrollController,
             key: const PageStorageKey('edit_tags_list'),
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),
+            padding: const EdgeInsets.fromLTRB(0, 60, 0, 100),
             itemCount: categories.length,
             onReorder: (oldIndex, newIndex) async {
               setState(() {
@@ -165,7 +166,7 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                         decoration: AppDecorations.groupedItem,
                         child: Text(
                           "No tags in this category",
-                          style: AppTextStyles.bodySmall.copyWith(
+                          style: AppTextStyles.body.copyWith(
                             color: Colors.grey.shade400,
                             fontStyle: FontStyle.italic,
                           ),
@@ -193,11 +194,15 @@ class EditTagsScreenState extends State<EditTagsScreen> {
                                     ),
                                     borderRadius: isLast
                                         ? const BorderRadius.vertical(
-                                            bottom: Radius.circular(10),
+                                            bottom: Radius.circular(
+                                              AppDimens.cornerRadius,
+                                            ),
                                           )
                                         : (tagIndex == 0
                                               ? const BorderRadius.vertical(
-                                                  top: Radius.circular(10),
+                                                  top: Radius.circular(
+                                                    AppDimens.cornerRadius,
+                                                  ),
                                                 )
                                               : BorderRadius.zero),
                                     child: Padding(
@@ -246,74 +251,24 @@ class EditTagsScreenState extends State<EditTagsScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: "Filter stamps...",
-                        hintStyle: const TextStyle(
-                          color: Colors.grey,
-                          fontFamily: '.SF Pro Text',
-                        ),
-                        prefixIcon: const Icon(
-                          CupertinoIcons.search,
-                          color: Colors.black54,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                      ),
-                      style: const TextStyle(fontFamily: '.SF Pro Text'),
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                    ),
+                  child: AppSearchBar(
+                    controller: _searchController,
+                    hintText: "Filter stamps...",
+                    showClear: _searchQuery.isNotEmpty,
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                    onChanged: (val) => setState(() => _searchQuery = val),
                   ),
                 ),
-                const SizedBox(width: 12),
-                GestureDetector(
+                const SizedBox(width: AppDimens.spacingM),
+                AppFloatingButton(
+                  icon: Icons.add,
+                  color: AppColors.primary,
+                  iconColor: Colors.white,
                   onTap: () =>
                       showAddTagDialog(context, widget.storage, _refresh),
-                  child: Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.add, color: Colors.white),
-                  ),
                 ),
               ],
             ),

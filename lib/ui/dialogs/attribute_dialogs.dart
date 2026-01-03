@@ -48,7 +48,7 @@ Future<void> showAddAttributeDialog(
               CupertinoTextField(
                 controller: labelController,
                 placeholder: "New name",
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppDimens.spacingM),
                 autofocus: true,
                 decoration: AppDecorations.input,
                 style: AppTextStyles.body,
@@ -120,22 +120,26 @@ Widget _buildTypeOption(
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isSelected ? CupertinoColors.systemGrey5 : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        border: isSelected ? Border.all(color: Colors.black12) : null,
+        color: isSelected ? AppColors.inputBackground : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+        border: isSelected
+            ? Border.all(color: AppColors.border.withOpacity(0.2))
+            : null,
       ),
       child: Row(
         children: [
           Icon(
             icon,
             size: 16,
-            color: isSelected ? Colors.black : Colors.black54,
+            color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
           ),
           const SizedBox(width: 6),
           Text(
             label,
-            style: AppTextStyles.bodySmall.copyWith(
-              color: isSelected ? Colors.black : Colors.black87,
+            style: AppTextStyles.body.copyWith(
+              color: isSelected
+                  ? AppColors.textPrimary
+                  : AppColors.textPrimary.withOpacity(0.8),
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
           ),
@@ -179,7 +183,7 @@ Future<void> showAttributeOptionsDialog(
           CupertinoTextField(
             controller: controller,
             placeholder: "Attribute Name",
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppDimens.spacingM),
             decoration: AppDecorations.input,
             style: AppTextStyles.body,
           ),

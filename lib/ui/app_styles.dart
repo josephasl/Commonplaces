@@ -9,8 +9,10 @@ class AppColors {
   static const Color destructiveBg = Color(0xFFFFE5E5);
 
   static const Color background = Colors.white;
-  static const Color groupedBackground = Color(0xFFF2F2F7); // iOS Grouped Grey
+
+  static const Color coloredBackground = Color(0xFFF2F2F7); // iOS Grouped Grey
   static const Color inputBackground = CupertinoColors.systemGrey6;
+  static const Color untaggedBackground = Color.fromARGB(255, 218, 218, 223);
 
   static const Color textPrimary = Colors.black;
   static const Color textSecondary = Colors.grey;
@@ -22,12 +24,18 @@ class AppColors {
 
 // --- DIMENSIONS ---
 class AppDimens {
+  static const double spacingXS = 4.0;
+  static const double spacingS = 8.0;
   static const double paddingS = 8.0;
+  static const double spacingM = 12.0;
+  static const double spacingL = 24.0;
+  static const double spacingXL = 32.0;
   static const double paddingM = 16.0;
   static const double paddingL = 24.0;
+  static const double paddingXL = 32.0;
 
-  static const double radiusM = 12.0;
-  static const double radiusL = 16.0;
+  static const double cornerRadius = 32.0;
+  static const double cornerRadiusLess = 12.0;
 }
 
 // --- TEXT STYLES ---
@@ -46,7 +54,7 @@ class AppTextStyles {
 
   static const TextStyle subHeader = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: FontWeight.w600,
     color: CupertinoColors.systemGrey,
     letterSpacing: -0.2,
@@ -59,22 +67,23 @@ class AppTextStyles {
     fontWeight: FontWeight.normal,
   );
 
-  static const TextStyle bodySmall = TextStyle(
-    fontFamily: _fontFamily,
-    fontSize: 14,
-    color: AppColors.textPrimary,
-  );
-
   static const TextStyle label = TextStyle(
     fontFamily: _fontFamily,
     fontSize: 14,
     fontWeight: FontWeight.w600,
     color: AppColors.textPrimary,
   );
+  static const TextStyle labelSmall = TextStyle(
+    fontFamily: _fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+
+    color: AppColors.textPrimary,
+  );
 
   static const TextStyle caption = TextStyle(
     fontFamily: _fontFamily,
-    fontSize: 12,
+    fontSize: 14,
     color: CupertinoColors.systemGrey,
   );
 
@@ -83,13 +92,36 @@ class AppTextStyles {
     fontSize: 16,
     fontWeight: FontWeight.bold,
   );
+
+  // --- CARD SPECIFIC STYLES ---
+
+  static const TextStyle cardBody = TextStyle(
+    fontFamily: _fontFamily,
+    fontSize: 12,
+    color: Color(0xFF616161), // Colors.grey.shade700
+    fontWeight: FontWeight.normal,
+  );
+
+  static const TextStyle cardTitle = TextStyle(
+    fontFamily: _fontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+    letterSpacing: -0.4,
+  );
+
+  static const TextStyle countLabel = TextStyle(
+    fontFamily: _fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+  );
 }
 
 // --- DECORATIONS ---
 class AppDecorations {
   static BoxDecoration card = BoxDecoration(
     color: AppColors.background,
-    borderRadius: BorderRadius.circular(AppDimens.radiusL),
+    borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
     boxShadow: [
       BoxShadow(
         color: Colors.black.withOpacity(0.05),
@@ -101,11 +133,31 @@ class AppDecorations {
 
   static BoxDecoration input = BoxDecoration(
     color: AppColors.inputBackground,
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
   );
 
   static BoxDecoration groupedItem = BoxDecoration(
     color: AppColors.background,
-    borderRadius: BorderRadius.circular(10),
+    borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
   );
+
+  static BoxDecoration searchField = BoxDecoration(
+    color: AppColors.background,
+    borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.1),
+        blurRadius: 10,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+
+  static List<BoxShadow> floatingShadow = [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.1), // Standard shadow
+      blurRadius: 10,
+      offset: const Offset(0, 4),
+    ),
+  ];
 }

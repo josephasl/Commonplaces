@@ -199,7 +199,7 @@ Widget _buildFlatFormSection({
         CupertinoTextField(
           controller: tagSearchController,
           placeholder: "Filter tags...",
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppDimens.spacingM),
           decoration: AppDecorations.input,
           style: AppTextStyles.body,
           onChanged: onTagQueryChanged,
@@ -208,12 +208,12 @@ Widget _buildFlatFormSection({
         if (visibleTags.isEmpty && tagSearchController.text.isNotEmpty)
           const Text(
             "No tags found",
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           )
         else if (visibleTags.isEmpty)
           const Text(
             "No tags available",
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           )
         else
           Wrap(
@@ -238,12 +238,25 @@ Widget _buildFlatFormSection({
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? catColor.withOpacity(0.2)
-                        : CupertinoColors.systemGrey6,
-                    borderRadius: BorderRadius.circular(12),
-                    border: isSelected ? Border.all(color: catColor) : null,
+                        ? Color.lerp(Colors.white, catColor, 0.2)
+                        : AppColors.background,
+                    borderRadius: BorderRadius.circular(
+                      AppDimens.cornerRadiusLess,
+                    ),
+                    border: isSelected
+                        ? Border.all(color: catColor)
+                        : Border.all(color: AppColors.border.withOpacity(0.3)),
                   ),
-                  child: Text("#$t", style: AppTextStyles.bodySmall),
+                  child: Text(
+                    "#$t",
+                    style: AppTextStyles.body.copyWith(
+                      color: isSelected ? catColor : Colors.grey.shade800,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
               );
             }).toList(),
@@ -251,16 +264,16 @@ Widget _buildFlatFormSection({
       ] else if (def.type == AttributeValueType.date) ...[
         Theme(
           data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Colors.black,
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
+            colorScheme: const ColorScheme.light().copyWith(
+              primary: AppColors.primary,
+              onPrimary: AppColors.background,
+              onSurface: AppColors.textPrimary,
             ),
           ),
           child: Container(
             decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.inputBackground,
+              borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
             ),
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: CalendarDatePicker(
@@ -304,7 +317,7 @@ Widget _buildFlatFormSection({
           placeholder: def.type == AttributeValueType.image
               ? "Paste image URL"
               : "Enter ${def.label.toLowerCase()}...",
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppDimens.spacingM),
           maxLines: def.label.toLowerCase().contains('note') ? 4 : 1,
           keyboardType: def.type == AttributeValueType.number
               ? const TextInputType.numberWithOptions(decimal: true)

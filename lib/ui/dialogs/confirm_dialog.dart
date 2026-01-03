@@ -20,8 +20,8 @@ Future<void> showDeleteConfirmationDialog({
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(
-              vertical: 24.0,
-              horizontal: 16.0,
+              vertical: AppDimens.paddingL,
+              horizontal: AppDimens.paddingM,
             ),
             child: Column(
               children: [
@@ -52,7 +52,7 @@ Future<void> showDeleteConfirmationDialog({
             width: double.infinity,
             child: CupertinoButton(
               color: AppColors.destructive,
-              borderRadius: BorderRadius.circular(AppDimens.radiusM),
+              borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
               onPressed: () {
                 onConfirm();
                 Navigator.pop(ctx);

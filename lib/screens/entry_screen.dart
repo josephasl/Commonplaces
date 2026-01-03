@@ -49,7 +49,7 @@ class _EntryScreenState extends State<EntryScreen> {
     _isSwitchingPage = true;
     _pageController
         .nextPage(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         )
         .then((_) => _isSwitchingPage = false);
@@ -60,7 +60,7 @@ class _EntryScreenState extends State<EntryScreen> {
     _isSwitchingPage = true;
     _pageController
         .previousPage(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         )
         .then((_) => _isSwitchingPage = false);
@@ -83,10 +83,10 @@ class _EntryScreenState extends State<EntryScreen> {
           Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
+          backgroundColor: AppColors.background,
+          surfaceTintColor: AppColors.background,
 
           elevation: 0,
           leading: const BackButton(color: Colors.black),
@@ -100,7 +100,7 @@ class _EntryScreenState extends State<EntryScreen> {
               IconButton(
                 icon: const Icon(
                   CupertinoIcons.ellipsis,
-                  color: Colors.black,
+                  color: AppColors.primary,
                   size: 20,
                 ),
                 onPressed: () => showEditEntryDialog(
@@ -130,7 +130,7 @@ class _EntryScreenState extends State<EntryScreen> {
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
-            child: Container(color: Colors.grey.shade200, height: 1.0),
+            child: Container(color: AppColors.divider, height: 1.0),
           ),
         ),
         body: widget.entries.isEmpty
@@ -150,10 +150,10 @@ class _EntryScreenState extends State<EntryScreen> {
                   return Hero(
                     tag: 'entry_hero_${entry.id}',
                     child: Material(
-                      color: Colors.white,
+                      color: AppColors.background,
                       child: NotificationListener<ScrollUpdateNotification>(
                         onNotification: (notification) {
-                          const double threshold = 60.0;
+                          const double threshold = 45.0;
                           final metrics = notification.metrics;
                           if (notification.dragDetails == null) return false;
                           if (metrics.pixels < -threshold)
@@ -168,7 +168,12 @@ class _EntryScreenState extends State<EntryScreen> {
                             physics: const BouncingScrollPhysics(
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
-                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                            padding: const EdgeInsets.fromLTRB(
+                              AppDimens.paddingL,
+                              AppDimens.paddingL,
+                              AppDimens.paddingL,
+                              100,
+                            ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -178,7 +183,9 @@ class _EntryScreenState extends State<EntryScreen> {
                                   return const SizedBox.shrink();
                                 final value = entry.getAttribute(key);
                                 return Padding(
-                                  padding: const EdgeInsets.only(bottom: 24.0),
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppDimens.paddingL,
+                                  ),
                                   child: _buildAttributeDisplay(
                                     definition,
                                     value,
@@ -214,7 +221,7 @@ class _EntryScreenState extends State<EntryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
             child: hasUrl
                 ? Image.network(
                     value.toString(),
@@ -263,8 +270,8 @@ class _EntryScreenState extends State<EntryScreen> {
             const Text("-", style: TextStyle(fontSize: 16))
           else
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: AppDimens.spacingS,
+              runSpacing: AppDimens.spacingS,
               children:
                   ((value is List)
                           ? value.map((e) => e.toString()).toList()
@@ -278,7 +285,9 @@ class _EntryScreenState extends State<EntryScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: color.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.cornerRadius,
+                            ),
                           ),
                           child: Text(
                             "#$t",
@@ -343,19 +352,23 @@ class _EntryScreenState extends State<EntryScreen> {
       width: double.infinity,
       height: 200,
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+        border: Border.all(color: AppColors.border.withOpacity(0.2)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(CupertinoIcons.photo, size: 40, color: Colors.grey.shade400),
-          const SizedBox(height: 8),
+          const Icon(
+            CupertinoIcons.photo,
+            size: 40,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: AppDimens.spacingS),
           Text(
             "No Image Provided",
             style: TextStyle(
-              color: Colors.grey.shade500,
+              color: AppColors.textSecondary.withOpacity(0.7),
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -367,7 +380,7 @@ class _EntryScreenState extends State<EntryScreen> {
 
   Widget _buildLabel(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: const EdgeInsets.only(bottom: AppDimens.spacingS),
       child: Text(
         text.toUpperCase(),
         style: AppTextStyles.caption.copyWith(

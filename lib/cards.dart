@@ -24,7 +24,7 @@ class EntryCard extends StatelessWidget {
 
     return Container(
       decoration: AppDecorations.card,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppDimens.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: keysToShow.map((key) {
@@ -49,10 +49,7 @@ class EntryCard extends StatelessWidget {
     if (def.key == 'title') {
       return Text(
         isEmpty ? "-" : value.toString(),
-        style: AppTextStyles.bodySmall.copyWith(
-          fontWeight: FontWeight.bold,
-          fontSize: 15,
-        ),
+        style: AppTextStyles.cardTitle,
       );
     }
 
@@ -78,18 +75,14 @@ class EntryCard extends StatelessWidget {
             }
           }
           return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
             ),
             child: Text(
               "#$t",
-              style: TextStyle(
-                fontSize: 10,
-                color: txt,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTextStyles.labelSmall.copyWith(color: txt),
             ),
           );
         }).toList(),
@@ -104,7 +97,7 @@ class EntryCard extends StatelessWidget {
         margin: const EdgeInsets.only(top: 4),
         decoration: BoxDecoration(
           color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
         ),
         clipBehavior: Clip.antiAlias,
         child: hasUrl
@@ -149,21 +142,31 @@ class EntryCard extends StatelessWidget {
             color: Colors.grey,
           ),
           const SizedBox(width: 4),
-          Text(dateStr, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+          Text(dateStr, style: AppTextStyles.cardBody),
         ],
       );
     }
 
-    if (def.type == AttributeValueType.number ||
-        def.type == AttributeValueType.rating) {
-      if (def.key == 'starRating') {
-        return Row(
-          children: [
-            const Icon(Icons.star, size: 14, color: Colors.amber),
-            Text(isEmpty ? " -" : " $value", style: AppTextStyles.caption),
-          ],
-        );
-      }
+    if (def.type == AttributeValueType.rating) {
+      final int rating = (value is int)
+          ? value
+          : (int.tryParse(value?.toString() ?? '0') ?? 0);
+
+      if (isEmpty) return Text("-", style: AppTextStyles.caption);
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(5, (index) {
+          return Icon(
+            index < rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
+            size: 14,
+            color: CupertinoColors.systemYellow,
+          );
+        }),
+      );
+    }
+
+    if (def.type == AttributeValueType.number) {
       return Text(
         "${def.label}: ${isEmpty ? '-' : value}",
         style: AppTextStyles.caption,
@@ -174,10 +177,7 @@ class EntryCard extends StatelessWidget {
       isEmpty ? "-" : value.toString(),
       maxLines: 4,
       overflow: TextOverflow.ellipsis,
-      style: AppTextStyles.bodySmall.copyWith(
-        color: Colors.grey.shade700,
-        fontSize: 12,
-      ),
+      style: AppTextStyles.cardBody,
     );
   }
 }
@@ -228,41 +228,43 @@ class FolderCard extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppDimens.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(CupertinoIcons.folder_solid, size: 32, color: fg),
+              Icon(
+                AppConstants.categoryIcons[folder.iconIndex],
+                size: 32,
+                color: fg,
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
                 ),
                 child: Text(
                   "$entryCount",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                  style: AppTextStyles.countLabel.copyWith(
                     color: fg.withOpacity(0.8),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppDimens.spacingM),
           Text(
             folder.getAttribute<String>('title') ?? "Untitled",
-            style: AppTextStyles.header.copyWith(fontSize: 16),
+            style: AppTextStyles.cardTitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppDimens.spacingS),
           if (folder.displayTags.isNotEmpty)
             Wrap(
               spacing: 4,
@@ -272,12 +274,14 @@ class FolderCard extends StatelessWidget {
                 if (tagColorResolver != null) chipColor = tagColorResolver!(t);
                 return Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
+                    horizontal: 8,
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
                     color: chipColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      AppDimens.cornerRadiusLess,
+                    ),
                     border: Border.all(
                       color: chipColor.withOpacity(0.3),
                       width: 0.5,
@@ -285,11 +289,7 @@ class FolderCard extends StatelessWidget {
                   ),
                   child: Text(
                     "#$t",
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: chipColor,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppTextStyles.labelSmall.copyWith(color: chipColor),
                   ),
                 );
               }).toList(),

@@ -18,7 +18,7 @@ class DeleteTriggerButton extends StatelessWidget {
       child: CupertinoButton(
         color: AppColors.destructiveBg,
         pressedOpacity: 0.7,
-        borderRadius: BorderRadius.circular(AppDimens.radiusM),
+        borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
         onPressed: onPressed,
         child: Text(
           label,

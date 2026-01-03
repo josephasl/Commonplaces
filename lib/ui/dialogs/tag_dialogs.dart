@@ -6,6 +6,7 @@ import '../../models.dart';
 import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
+import '../widgets/common_ui.dart';
 import 'confirm_dialog.dart';
 
 Future<String?> showAddTagDialog(
@@ -85,19 +86,19 @@ Future<String?> _showTagDialog({
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text("Stamp Name", style: AppTextStyles.label),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppDimens.spacingS),
                 CupertinoTextField(
                   controller: controller,
                   placeholder: "Enter name",
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppDimens.spacingM),
                   autofocus: !isEditMode,
                   decoration: AppDecorations.input,
                   style: AppTextStyles.body,
                   onSubmitted: (_) => saveAndClose(),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppDimens.spacingL),
                 const Text("Group", style: AppTextStyles.label),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppDimens.spacingM),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -112,22 +113,27 @@ Future<String?> _showTagDialog({
                           ),
                           decoration: BoxDecoration(
                             color: selectedCategoryId == null
-                                ? CupertinoColors.systemGrey4
+                                ? AppColors.inputBackground
                                 : AppColors.inputBackground,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.cornerRadius,
+                            ),
                             border: selectedCategoryId == null
-                                ? Border.all(color: Colors.black54, width: 1.5)
+                                ? Border.all(
+                                    color: AppColors.textSecondary,
+                                    width: 1.5,
+                                  )
                                 : null,
                           ),
                           child: Text(
                             "None",
-                            style: AppTextStyles.bodySmall.copyWith(
+                            style: AppTextStyles.body.copyWith(
                               fontWeight: selectedCategoryId == null
                                   ? FontWeight.w600
                                   : FontWeight.normal,
                               color: selectedCategoryId == null
-                                  ? Colors.black
-                                  : Colors.black54,
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -147,9 +153,11 @@ Future<String?> _showTagDialog({
                             ),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? catColor.withOpacity(0.2)
+                                  ? Color.lerp(Colors.white, catColor, 0.2)
                                   : AppColors.inputBackground,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(
+                                AppDimens.cornerRadius,
+                              ),
                               border: isSelected
                                   ? Border.all(color: catColor, width: 1.5)
                                   : null,
@@ -159,12 +167,14 @@ Future<String?> _showTagDialog({
                                 Icon(
                                   AppConstants.categoryIcons[cat.iconIndex],
                                   size: 16,
-                                  color: isSelected ? catColor : Colors.black54,
+                                  color: isSelected
+                                      ? catColor
+                                      : AppColors.textSecondary,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   cat.name,
-                                  style: AppTextStyles.bodySmall.copyWith(
+                                  style: AppTextStyles.body.copyWith(
                                     fontWeight: isSelected
                                         ? FontWeight.w600
                                         : FontWeight.normal,
@@ -179,7 +189,7 @@ Future<String?> _showTagDialog({
                   ),
                 ),
                 if (isEditMode) ...[
-                  const SizedBox(height: 32),
+                  const SizedBox(height: AppDimens.spacingXL),
                   DeleteTriggerButton(
                     label: "Delete Tag",
                     onPressed: () {
@@ -239,28 +249,28 @@ Future<void> showAddCategoryDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text("Group name", style: AppTextStyles.label),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppDimens.spacingS),
               CupertinoTextField(
                 controller: nameController,
                 placeholder: "Enter group name",
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppDimens.spacingM),
                 autofocus: true,
                 decoration: AppDecorations.input,
                 style: AppTextStyles.body,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppDimens.spacingL),
               const Text("Color", style: AppTextStyles.label),
-              const SizedBox(height: 12),
-              _buildColorPicker(
-                selectedColorIndex,
-                (i) => setState(() => selectedColorIndex = i),
+              const SizedBox(height: AppDimens.spacingM),
+              AppColorPicker(
+                selectedIndex: selectedColorIndex,
+                onSelect: (i) => setState(() => selectedColorIndex = i),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppDimens.spacingL),
               const Text("Icon", style: AppTextStyles.label),
-              const SizedBox(height: 12),
-              _buildIconPicker(
-                selectedIconIndex,
-                (i) => setState(() => selectedIconIndex = i),
+              const SizedBox(height: AppDimens.spacingM),
+              AppIconPicker(
+                selectedIndex: selectedIconIndex,
+                onSelect: (i) => setState(() => selectedIconIndex = i),
               ),
             ],
           ),
@@ -306,29 +316,29 @@ Future<void> showEditCategoryDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text("Category Name", style: AppTextStyles.label),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppDimens.spacingS),
               CupertinoTextField(
                 controller: nameController,
                 placeholder: "Enter category name",
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppDimens.spacingM),
                 decoration: AppDecorations.input,
                 style: AppTextStyles.body,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppDimens.spacingL),
               const Text("Color", style: AppTextStyles.label),
-              const SizedBox(height: 12),
-              _buildColorPicker(
-                selectedColorIndex,
-                (i) => setState(() => selectedColorIndex = i),
+              const SizedBox(height: AppDimens.spacingM),
+              AppColorPicker(
+                selectedIndex: selectedColorIndex,
+                onSelect: (i) => setState(() => selectedColorIndex = i),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppDimens.spacingL),
               const Text("Icon", style: AppTextStyles.label),
-              const SizedBox(height: 12),
-              _buildIconPicker(
-                selectedIconIndex,
-                (i) => setState(() => selectedIconIndex = i),
+              const SizedBox(height: AppDimens.spacingM),
+              AppIconPicker(
+                selectedIndex: selectedIconIndex,
+                onSelect: (i) => setState(() => selectedIconIndex = i),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: AppDimens.spacingXL),
               DeleteTriggerButton(
                 label: "Delete Category",
                 onPressed: () {
@@ -349,59 +359,6 @@ Future<void> showEditCategoryDialog(
           ),
         );
       },
-    ),
-  );
-}
-
-Widget _buildColorPicker(int selectedIndex, Function(int) onSelect) {
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: List.generate(AppConstants.categoryColors.length, (index) {
-        final isSelected = selectedIndex == index;
-        return GestureDetector(
-          onTap: () => onSelect(index),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppConstants.categoryColors[index],
-              shape: BoxShape.circle,
-              border: isSelected
-                  ? Border.all(color: Colors.black, width: 3)
-                  : null,
-            ),
-          ),
-        );
-      }),
-    ),
-  );
-}
-
-Widget _buildIconPicker(int selectedIndex, Function(int) onSelect) {
-  return SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: List.generate(AppConstants.categoryIcons.length, (index) {
-        final isSelected = selectedIndex == index;
-        return GestureDetector(
-          onTap: () => onSelect(index),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.grey.shade300 : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              AppConstants.categoryIcons[index],
-              size: 24,
-              color: Colors.black87,
-            ),
-          ),
-        );
-      }),
     ),
   );
 }

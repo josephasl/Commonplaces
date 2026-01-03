@@ -10,6 +10,7 @@ import '../ui/app_styles.dart';
 import 'entry_screen.dart';
 import '../ui/dialogs/sort_bottom_sheet.dart';
 import '../shakeable.dart';
+import '../ui/widgets/common_ui.dart';
 
 class FolderScreen extends StatefulWidget {
   final AppFolder folder;
@@ -245,7 +246,7 @@ class FolderScreenState extends State<FolderScreen> {
           _openLastViewedEntry(processedEntries);
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.coloredBackground,
 
         appBar: AppBar(
           title: Text(
@@ -258,7 +259,7 @@ class FolderScreenState extends State<FolderScreen> {
           centerTitle: true,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1.0),
-            child: Container(color: Colors.grey.shade200, height: 1.0),
+            child: Container(color: AppColors.divider, height: 1.0),
           ),
           actions: [
             if (_isEditing)
@@ -274,7 +275,7 @@ class FolderScreenState extends State<FolderScreen> {
               IconButton(
                 icon: const Icon(
                   CupertinoIcons.ellipsis,
-                  color: Colors.black,
+                  color: AppColors.primary,
                   size: 20,
                 ),
                 onPressed: () async {
@@ -299,160 +300,93 @@ class FolderScreenState extends State<FolderScreen> {
         ),
         body: Stack(
           children: [
-            Column(
-              children: [
-                if (widget.folder.displayTags.isNotEmpty)
-                  Container(
-                    height: 62,
-                    padding: const EdgeInsets.only(top: 12, bottom: 12),
-                    child: ListView.separated(
-                      controller: _tagScrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      scrollDirection: Axis.horizontal,
-                      itemCount: widget.folder.displayTags.length,
-                      separatorBuilder: (c, i) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final tag = widget.folder.displayTags[index];
-                        final isActive = _activeTags.contains(tag);
-                        final catColor = widget.storage.getTagColor(tag);
-                        return GestureDetector(
-                          onTap: () {
-                            if (!mounted) return;
-                            setState(
-                              () => isActive
-                                  ? _activeTags.remove(tag)
-                                  : _activeTags.add(tag),
-                            );
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? catColor.withOpacity(0.2)
-                                  : const Color(0xFFF2F2F7),
-                              borderRadius: BorderRadius.circular(24),
-                              border: isActive
-                                  ? Border.all(color: catColor)
-                                  : null,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              "#$tag",
-                              style: TextStyle(
-                                color: catColor,
-                                fontWeight: isActive
-                                    ? FontWeight.w600
-                                    : FontWeight.normal,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      if (_isEditing) setState(() => _isEditing = false);
-                    },
-                    child: Padding(
-                      // Only padding left/right here.
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: MasonryGridView.count(
-                        controller: _scrollController,
-                        key: PageStorageKey('folder_grid_${widget.folder.id}'),
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        // Bottom padding here allows scrolling BEHIND floating elements
-                        padding: const EdgeInsets.only(bottom: 100),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 0,
-                        crossAxisSpacing: 0,
-                        itemCount: processedEntries.length,
-                        itemBuilder: (context, index) {
-                          final entry = processedEntries[index];
+            GestureDetector(
+              onTap: () {
+                if (_isEditing) setState(() => _isEditing = false);
+              },
+              child: MasonryGridView.count(
+                controller: _scrollController,
+                key: PageStorageKey('folder_grid_${widget.folder.id}'),
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                // Top padding allows scrolling BEHIND tags (if present)
+                padding: EdgeInsets.fromLTRB(
+                  8,
+                  widget.folder.displayTags.isNotEmpty ? 68 : 10,
+                  8,
+                  100,
+                ),
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                itemCount: processedEntries.length,
+                itemBuilder: (context, index) {
+                  final entry = processedEntries[index];
 
-                          return GestureDetector(
-                            onLongPress: () =>
-                                setState(() => _isEditing = true),
-                            onTap: () {
-                              if (_isEditing) {
-                                setState(() => _isEditing = false);
-                              } else {
-                                updateLastViewedEntry(entry.id);
-                                widget.onEntryTap(processedEntries, index);
-                              }
-                            },
-                            child: Shakeable(
-                              enabled: _isEditing,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(5.0),
-                                    child: Hero(
-                                      tag: 'entry_hero_${entry.id}',
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: EntryCard(
-                                          entry: entry,
-                                          visibleAttributes: visibleAttrs,
-                                          tagColorResolver:
-                                              widget.storage.getTagColor,
-                                          registry: registry,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (_isEditing)
-                                    Positioned(
-                                      top: 0,
-                                      right: 0,
-                                      child: GestureDetector(
-                                        onTap: () => _deleteEntry(entry),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF8E8E93),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: Colors.white,
-                                              width: 2,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(
-                                                  0.1,
-                                                ),
-                                                blurRadius: 4,
-                                              ),
-                                            ],
-                                          ),
-                                          padding: const EdgeInsets.all(6),
-                                          child: const Icon(
-                                            CupertinoIcons.xmark,
-                                            color: Colors.white,
-                                            size: 14,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                  return GestureDetector(
+                    onLongPress: () => setState(() => _isEditing = true),
+                    onTap: () {
+                      if (_isEditing) {
+                        setState(() => _isEditing = false);
+                      } else {
+                        updateLastViewedEntry(entry.id);
+                        widget.onEntryTap(processedEntries, index);
+                      }
+                    },
+                    child: ShakeableWithDelete(
+                      enabled: _isEditing,
+                      onDelete: () => _deleteEntry(entry),
+                      child: Hero(
+                        tag: 'entry_hero_${entry.id}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: EntryCard(
+                            entry: entry,
+                            visibleAttributes: visibleAttrs,
+                            tagColorResolver: widget.storage.getTagColor,
+                            registry: registry,
+                          ),
+                        ),
                       ),
                     ),
+                  );
+                },
+              ),
+            ),
+            if (widget.folder.displayTags.isNotEmpty)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: 62,
+                  padding: const EdgeInsets.only(top: 12, bottom: 12),
+                  child: ListView.separated(
+                    controller: _tagScrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.folder.displayTags.length,
+                    separatorBuilder: (c, i) =>
+                        const SizedBox(width: AppDimens.spacingS),
+                    itemBuilder: (context, index) {
+                      final tag = widget.folder.displayTags[index];
+                      final isActive = _activeTags.contains(tag);
+                      final catColor = widget.storage.getTagColor(tag);
+                      return AppTagChip(
+                        label: tag,
+                        color: catColor,
+                        isActive: isActive,
+                        onTap: () => setState(
+                          () => isActive
+                              ? _activeTags.remove(tag)
+                              : _activeTags.add(tag),
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ],
-            ),
+              ),
             Positioned(
               bottom: 20,
               left: 16,
@@ -460,78 +394,28 @@ class FolderScreenState extends State<FolderScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(25),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: "Search...",
-                          hintStyle: const TextStyle(color: Colors.grey),
-                          prefixIcon: const Icon(
-                            CupertinoIcons.search,
-                            color: Colors.black54,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
-                          ),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(
-                                    Icons.close,
-                                    color: Colors.grey,
-                                  ),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    if (mounted)
-                                      setState(() => _searchQuery = '');
-                                  },
-                                )
-                              : null,
-                        ),
-                        onChanged: (val) {
-                          if (mounted) setState(() => _searchQuery = val);
-                        },
-                      ),
+                    child: AppSearchBar(
+                      controller: _searchController,
+                      showClear: _searchQuery.isNotEmpty,
+                      onClear: () {
+                        _searchController.clear();
+                        if (mounted) setState(() => _searchQuery = '');
+                      },
+                      onChanged: (val) {
+                        if (mounted) setState(() => _searchQuery = val);
+                      },
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
+                  const SizedBox(width: AppDimens.spacingM),
+                  AppFloatingButton(
+                    icon: CupertinoIcons.sort_down,
                     onTap: _showSortSheet,
-                    child: Container(
-                      height: 50,
-                      width: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.sort_down,
-                        color: Colors.black,
-                      ),
-                    ),
                   ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
+                  const SizedBox(width: AppDimens.spacingM),
+                  AppFloatingButton(
+                    icon: CupertinoIcons.add,
+                    color: AppColors.primary,
+                    iconColor: Colors.white,
                     onTap: () async {
                       List<String>? prefillTags;
                       if (widget.folder.displayTags.isNotEmpty)
@@ -545,25 +429,6 @@ class FolderScreenState extends State<FolderScreen> {
                       );
                       refresh();
                     },
-                    child: Container(
-                      height: 50,
-                      width: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.add,
-                        color: Colors.white,
-                      ),
-                    ),
                   ),
                 ],
               ),

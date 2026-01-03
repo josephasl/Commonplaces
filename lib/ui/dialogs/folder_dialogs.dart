@@ -7,6 +7,7 @@ import '../../attributes.dart';
 import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
+import '../widgets/common_ui.dart';
 import 'confirm_dialog.dart';
 import 'tag_dialogs.dart';
 
@@ -47,6 +48,7 @@ Future<void> _showFolderDialog({
   final TextEditingController titleController = TextEditingController(
     text: isEditMode ? folderToEdit.getAttribute('title') : '',
   );
+  int selectedIconIndex = isEditMode ? folderToEdit!.iconIndex : 0;
 
   return showCupertinoModalPopup(
     context: context,
@@ -102,6 +104,7 @@ Future<void> _showFolderDialog({
                     : storage.createNewFolder();
                 folder.setAttribute('title', titleController.text);
                 folder.setAttribute('displayTags', selectedTags);
+                folder.setAttribute('iconIndex', selectedIconIndex);
                 List<String> newActiveList = [];
                 List<String> newVisibleList = [];
                 for (var def in sortedAttributes) {
@@ -118,12 +121,19 @@ Future<void> _showFolderDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text("Icon", style: AppTextStyles.label),
+                const SizedBox(height: AppDimens.spacingS),
+                AppIconPicker(
+                  selectedIndex: selectedIconIndex,
+                  onSelect: (i) => setState(() => selectedIconIndex = i),
+                ),
+                const SizedBox(height: AppDimens.spacingL),
                 const Text("Folder Name", style: AppTextStyles.label),
                 const SizedBox(height: 8),
                 CupertinoTextField(
                   controller: titleController,
                   placeholder: "New folder",
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppDimens.spacingM),
                   decoration: AppDecorations.input,
                   style: AppTextStyles.body,
                 ),
@@ -137,10 +147,7 @@ Future<void> _showFolderDialog({
                     CupertinoButton(
                       padding: EdgeInsets.zero,
                       minSize: 0,
-                      child: const Text(
-                        "New Tag",
-                        style: AppTextStyles.bodySmall,
-                      ),
+                      child: const Text("New Tag", style: AppTextStyles.body),
                       onPressed: () async {
                         final newTag = await showAddTagDialog(
                           context,
@@ -164,7 +171,7 @@ Future<void> _showFolderDialog({
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "No tags available",
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
                   )
                 else
@@ -191,19 +198,27 @@ Future<void> _showFolderDialog({
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? catColor.withOpacity(0.2)
-                                : CupertinoColors.systemGrey6,
-                            borderRadius: BorderRadius.circular(12),
+                                ? Color.lerp(Colors.white, catColor, 0.2)
+                                : AppColors.background,
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.cornerRadiusLess,
+                            ),
                             border: isSelected
                                 ? Border.all(color: catColor)
-                                : null,
+                                : Border.all(
+                                    color: AppColors.border.withOpacity(0.3),
+                                  ),
                           ),
                           child: Text(
                             "#$tag",
-                            style: AppTextStyles.bodySmall.copyWith(
+                            style: AppTextStyles.body.copyWith(
+                              color: isSelected
+                                  ? catColor
+                                  : Colors.grey.shade800,
                               fontWeight: isSelected
-                                  ? FontWeight.w500
+                                  ? FontWeight.w600
                                   : FontWeight.normal,
+                              fontSize: 13,
                             ),
                           ),
                         ),
@@ -249,13 +264,17 @@ Future<void> _showFolderDialog({
                         return Container(
                           key: ValueKey(attrKey),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.background,
                             borderRadius: BorderRadius.vertical(
                               top: index == 0
-                                  ? const Radius.circular(10)
+                                  ? const Radius.circular(
+                                      AppDimens.cornerRadius,
+                                    )
                                   : Radius.zero,
                               bottom: isLast
-                                  ? const Radius.circular(10)
+                                  ? const Radius.circular(
+                                      AppDimens.cornerRadius,
+                                    )
                                   : Radius.zero,
                             ),
                           ),
@@ -278,17 +297,17 @@ Future<void> _showFolderDialog({
                                         child: Icon(
                                           Icons.menu,
                                           color: Colors.grey,
-                                          size: 20,
+                                          size: 22,
                                         ),
                                       ),
                                     ),
                                     Expanded(
                                       child: Text(
                                         def.label,
-                                        style: AppTextStyles.bodySmall.copyWith(
+                                        style: AppTextStyles.body.copyWith(
                                           color: isActive
-                                              ? Colors.black
-                                              : Colors.grey,
+                                              ? AppColors.textPrimary
+                                              : AppColors.textSecondary,
                                         ),
                                       ),
                                     ),
@@ -327,11 +346,12 @@ Future<void> _showFolderDialog({
                                         isVisible
                                             ? CupertinoIcons.eye_solid
                                             : CupertinoIcons.eye_slash,
-                                        color: isActive
+                                        color: (isActive
                                             ? (isVisible
                                                   ? CupertinoColors.activeBlue
-                                                  : Colors.grey)
-                                            : Colors.grey.withOpacity(0.3),
+                                                  : AppColors.textSecondary)
+                                            : AppColors.textSecondary
+                                                  .withOpacity(0.3)),
                                         size: 20,
                                       ),
                                     ),

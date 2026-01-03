@@ -30,7 +30,7 @@ class AppConstants {
   ];
 
   static const List<IconData> categoryIcons = [
-    CupertinoIcons.tag_fill, // 0
+    CupertinoIcons.folder_fill, // 0
     CupertinoIcons.book_fill,
     CupertinoIcons.briefcase_fill,
     CupertinoIcons.person_fill,
@@ -130,6 +130,7 @@ class AppFolder {
 
   String get sortKey => attributes['sortKey']?.toString() ?? 'dateCreated';
   bool get sortAscending => (attributes['sortAscending'] as bool?) ?? false;
+  int get iconIndex => (attributes['iconIndex'] as int?) ?? 0;
 
   void setSortPreferences(String key, bool ascending) {
     attributes['sortKey'] = key;

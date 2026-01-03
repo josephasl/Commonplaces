@@ -6,6 +6,7 @@ import '../../models.dart';
 import '../dialogs.dart';
 import '../ui/app_styles.dart';
 import 'edit_tags_screen.dart';
+import '../ui/widgets/common_ui.dart';
 
 // Sort Options Enum
 enum AttributeSortOption { nameAsc, nameDesc, dateNewest, dateOldest }
@@ -97,27 +98,46 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
             ),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60.0),
-          child: Column(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Container(color: AppColors.divider, height: 1.0),
+        ),
+      ),
+      body: Stack(
+        children: [
+          TabBarView(
+            controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              Container(color: AppColors.border.withOpacity(0.2), height: 1.0),
-              const SizedBox(height: 3),
-              Container(
-                height: 36,
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
+              EditTagsScreen(
+                key: _editTagsKey,
+                storage: widget.storage,
+                onUpdate: widget.onUpdate,
+              ),
+              _AttributesManager(
+                storage: widget.storage,
+                onUpdate: widget.onUpdate,
+                scrollController: _attributesScrollController,
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: 56, // 36 height + 10 top + 10 bottom padding
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              child: Container(
                 decoration: BoxDecoration(
                   color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
                 ),
                 child: TabBar(
                   controller: _tabController,
                   dividerColor: Colors.transparent,
                   indicator: BoxDecoration(
                     color: AppColors.background,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.12),
@@ -136,23 +156,7 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          EditTagsScreen(
-            key: _editTagsKey,
-            storage: widget.storage,
-            onUpdate: widget.onUpdate,
-          ),
-          _AttributesManager(
-            storage: widget.storage,
-            onUpdate: widget.onUpdate,
-            scrollController: _attributesScrollController,
+            ),
           ),
         ],
       ),
@@ -187,13 +191,13 @@ class _AttributesManagerState extends State<_AttributesManager> {
     final allAttributes = widget.storage.getSortedAttributeDefinitions();
 
     return Container(
-      color: AppColors.groupedBackground,
+      color: AppColors.coloredBackground,
       child: Stack(
         children: [
           ReorderableListView.builder(
             scrollController: widget.scrollController,
             key: const PageStorageKey('attributes_list'),
-            padding: const EdgeInsets.fromLTRB(0, 20, 0, 100),
+            padding: const EdgeInsets.fromLTRB(0, 68, 0, 100),
             itemCount: allAttributes.length,
             proxyDecorator: (child, index, animation) {
               return Material(
@@ -225,8 +229,12 @@ class _AttributesManagerState extends State<_AttributesManager> {
                   color: AppColors.background,
                   // Grouped style rounding
                   borderRadius: BorderRadius.vertical(
-                    top: index == 0 ? const Radius.circular(10) : Radius.zero,
-                    bottom: isLast ? const Radius.circular(10) : Radius.zero,
+                    top: index == 0
+                        ? const Radius.circular(AppDimens.cornerRadius)
+                        : Radius.zero,
+                    bottom: isLast
+                        ? const Radius.circular(AppDimens.cornerRadius)
+                        : Radius.zero,
                   ),
                 ),
                 child: Column(
@@ -247,10 +255,10 @@ class _AttributesManagerState extends State<_AttributesManager> {
                               },
                         borderRadius: BorderRadius.vertical(
                           top: index == 0
-                              ? const Radius.circular(10)
+                              ? const Radius.circular(AppDimens.cornerRadius)
                               : Radius.zero,
                           bottom: isLast
-                              ? const Radius.circular(10)
+                              ? const Radius.circular(AppDimens.cornerRadius)
                               : Radius.zero,
                         ),
                         child: Padding(
@@ -336,25 +344,12 @@ class _AttributesManagerState extends State<_AttributesManager> {
           Positioned(
             bottom: 20,
             right: 16,
-            child: GestureDetector(
+            child: AppFloatingButton(
+              icon: CupertinoIcons.add,
+              color: AppColors.primary,
+              iconColor: Colors.white,
               onTap: () =>
                   showAddAttributeDialog(context, widget.storage, _refresh),
-              child: Container(
-                height: 50,
-                width: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(CupertinoIcons.add, color: Colors.white),
-              ),
             ),
           ),
         ],

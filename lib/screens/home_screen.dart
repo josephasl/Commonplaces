@@ -11,6 +11,7 @@ import 'entry_screen.dart';
 import 'manage_library_screen.dart';
 import '../ui/app_styles.dart';
 import '../ui/dialogs/sort_bottom_sheet.dart';
+import '../ui/widgets/common_ui.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -386,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final categories = _storage.getTagCategories();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.coloredBackground,
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
@@ -396,7 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: Colors.grey.shade200, height: 1.0),
         ),
-        title: Text("My Library", style: AppTextStyles.header),
+        title: Text("Commonplaces", style: AppTextStyles.header),
         actions: [
           if (_isEditing)
             CupertinoButton(
@@ -421,62 +422,51 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Stack(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Row(
-                  children: [
-                    _buildFilterChip(
-                      'ALL',
-                      'All',
-                      Colors.black,
-                      Icons.grid_view,
-                    ),
-                    ...categories
-                        .map(
-                          (cat) => _buildFilterChip(
-                            cat.id,
-                            cat.name,
-                            AppConstants.categoryColors[cat.colorIndex],
-                            AppConstants.categoryIcons[cat.iconIndex],
-                          ),
-                        )
-                        .toList(),
-                  ],
-                ),
+          GestureDetector(
+            onTap: () {
+              if (_isEditing) setState(() => _isEditing = false);
+            },
+            child: MasonryGridView.count(
+              controller: _homeScrollController,
+              key: const PageStorageKey('home_grid'),
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (_isEditing) setState(() => _isEditing = false);
-                  },
-                  child: Padding(
-                    // FIX: Horizontal padding on wrapper only
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: MasonryGridView.count(
-                      controller: _homeScrollController,
-                      key: const PageStorageKey('home_grid'),
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      // FIX: Bottom padding moved inside grid
-                      padding: const EdgeInsets.only(bottom: 100),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      itemCount: allItems.length,
-                      itemBuilder: (context, index) {
-                        final item = allItems[index];
-                        return _buildFolderItem(item);
-                      },
-                    ),
-                  ),
-                ),
+              // Top padding (68) allows content to start below tags but scroll behind them
+              padding: const EdgeInsets.fromLTRB(8, 68, 8, 100),
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              itemCount: allItems.length,
+              itemBuilder: (context, index) {
+                final item = allItems[index];
+                return _buildFolderItem(item);
+              },
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Row(
+                children: [
+                  _buildFilterChip('ALL', 'All', Colors.black, Icons.grid_view),
+                  ...categories
+                      .map(
+                        (cat) => _buildFilterChip(
+                          cat.id,
+                          cat.name,
+                          AppConstants.categoryColors[cat.colorIndex],
+                          AppConstants.categoryIcons[cat.iconIndex],
+                        ),
+                      )
+                      .toList(),
+                ],
               ),
-            ],
+            ),
           ),
           Positioned(
             bottom: 20,
@@ -485,95 +475,31 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: "Search folders...",
-                        hintStyle: const TextStyle(color: Colors.grey),
-                        prefixIcon: const Icon(
-                          CupertinoIcons.search,
-                          color: Colors.black54,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
-                              )
-                            : null,
-                      ),
-                      onChanged: (val) => setState(() => _searchQuery = val),
-                    ),
+                  child: AppSearchBar(
+                    controller: _searchController,
+                    hintText: "Search folders...",
+                    showClear: _searchQuery.isNotEmpty,
+                    onClear: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                    onChanged: (val) => setState(() => _searchQuery = val),
                   ),
                 ),
-                const SizedBox(width: 12),
-                GestureDetector(
+                const SizedBox(width: AppDimens.spacingM),
+                AppFloatingButton(
+                  icon: CupertinoIcons.sort_down,
                   onTap: _showFolderSortSheet,
-                  child: Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      CupertinoIcons.sort_down,
-                      color: Colors.black,
-                    ),
-                  ),
                 ),
-                const SizedBox(width: 12),
-                GestureDetector(
+                const SizedBox(width: AppDimens.spacingM),
+                AppFloatingButton(
+                  icon: CupertinoIcons.add,
+                  color: AppColors.primary,
+                  iconColor: Colors.white,
                   onTap: () async {
                     await showAddEntryDialog(context, _storage, _refreshData);
                     _refreshData();
                   },
-                  child: Container(
-                    height: 50,
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(CupertinoIcons.add, color: Colors.white),
-                  ),
                 ),
               ],
             ),
@@ -585,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFilterChip(String id, String label, Color color, IconData icon) {
     final isSelected = _selectedFilterCategoryId == id;
-    final bgColor = isSelected ? color : Colors.grey.shade100;
+    final bgColor = isSelected ? color : AppColors.background;
     final textColor = isSelected ? Colors.white : Colors.grey.shade800;
     return GestureDetector(
       onTap: () => setState(() => _selectedFilterCategoryId = id),
@@ -639,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () => _openFolder(folder),
         child: FolderCard(
           folder: folder,
-          color: const Color(0xFFF2F2F7),
+          color: AppColors.untaggedBackground,
           entryCount: count,
           tagColorResolver: _storage.getTagColor,
         ),

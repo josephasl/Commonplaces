@@ -58,7 +58,7 @@ class _BaseBottomSheetState extends State<BaseBottomSheet> {
           decoration: const BoxDecoration(
             color: AppColors.background,
             borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppDimens.radiusL),
+              top: Radius.circular(AppDimens.cornerRadius),
             ),
           ),
           child: Material(
