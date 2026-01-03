@@ -205,3 +205,35 @@ class AppTagChip extends StatelessWidget {
     );
   }
 }
+
+class AppPageRoute<T> extends PageRouteBuilder<T> {
+  final WidgetBuilder builder;
+
+  AppPageRoute({required this.builder})
+    : super(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            builder(context),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curve = Curves.easeInOut;
+
+          final entranceTween = Tween(
+            begin: const Offset(1.0, 0.0),
+            end: Offset.zero,
+          ).chain(CurveTween(curve: curve));
+
+          final exitTween = Tween(
+            begin: Offset.zero,
+            end: const Offset(-1.0, 0.0),
+          ).chain(CurveTween(curve: curve));
+
+          return SlideTransition(
+            position: animation.drive(entranceTween),
+            child: SlideTransition(
+              position: secondaryAnimation.drive(exitTween),
+              child: child,
+            ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      );
+}

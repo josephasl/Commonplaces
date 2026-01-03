@@ -47,7 +47,7 @@ Future<void> showAddAttributeDialog(
               const SizedBox(height: 8),
               CupertinoTextField(
                 controller: labelController,
-                placeholder: "New name",
+                placeholder: "Enter name",
                 padding: const EdgeInsets.all(AppDimens.spacingM),
                 autofocus: true,
                 decoration: AppDecorations.input,

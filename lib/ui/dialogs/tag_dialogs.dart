@@ -85,7 +85,7 @@ Future<String?> _showTagDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Stamp Name", style: AppTextStyles.label),
+                const Text("Name", style: AppTextStyles.label),
                 const SizedBox(height: AppDimens.spacingS),
                 CupertinoTextField(
                   controller: controller,
@@ -248,7 +248,7 @@ Future<void> showAddCategoryDialog(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Group name", style: AppTextStyles.label),
+              const Text("Name", style: AppTextStyles.label),
               const SizedBox(height: AppDimens.spacingS),
               CupertinoTextField(
                 controller: nameController,

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../../models.dart';
@@ -93,6 +94,7 @@ class EntryCard extends StatelessWidget {
 
     if (def.type == AttributeValueType.image) {
       final hasUrl = !isEmpty;
+      final isLocal = hasUrl && !value.toString().startsWith('http');
       return Container(
         width: double.infinity,
         height: 120,
@@ -103,13 +105,21 @@ class EntryCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: hasUrl
-            ? Image.network(
-                value.toString(),
-                fit: BoxFit.cover,
-                errorBuilder: (c, e, s) => const Center(
-                  child: Icon(Icons.broken_image, color: Colors.grey),
-                ),
-              )
+            ? (isLocal
+                  ? Image.file(
+                      File(value.toString()),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => const Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    )
+                  : Image.network(
+                      value.toString(),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => const Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    ))
             : const Center(
                 child: Icon(
                   Icons.image_not_supported,

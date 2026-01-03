@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _homeScrollController = ScrollController();
 
   final GlobalKey<ManageLibraryScreenState> _manageLibKey = GlobalKey();
-  final GlobalKey<FolderScreenState> _folderScreenKey = GlobalKey();
+  GlobalKey<FolderScreenState> _folderScreenKey = GlobalKey();
   final GlobalKey<NavigatorState> _folderNavigatorKey = GlobalKey();
 
   ScrollPhysics _pagePhysics = const BouncingScrollPhysics();
@@ -201,6 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openFolder(AppFolder folder) {
     setState(() {
+      if (_lastOpenedFolder?.id != folder.id) {
+        _folderScreenKey = GlobalKey();
+      }
       _lastOpenedFolder = folder;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_pageController.hasClients) {
@@ -642,7 +645,7 @@ class _FolderTabState extends State<FolderTab>
       key: widget.navigatorKey,
       observers: [_observer],
       onGenerateRoute: (settings) {
-        return CupertinoPageRoute(
+        return AppPageRoute(
           builder: (context) => FolderScreen(
             key: widget.folderScreenKey,
             folder: widget.folder,
@@ -651,7 +654,7 @@ class _FolderTabState extends State<FolderTab>
             onEntryTap: (entries, index) {
               Navigator.of(context)
                   .push(
-                    CupertinoPageRoute(
+                    AppPageRoute(
                       builder: (context) => EntryScreen(
                         entries: entries,
                         initialIndex: index,

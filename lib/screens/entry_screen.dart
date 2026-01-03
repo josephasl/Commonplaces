@@ -1,10 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models.dart';
 import '../../attributes.dart';
 import '../../storage_service.dart';
 import '../ui/app_styles.dart';
 import '../dialogs.dart';
+import 'full_screen_image.dart';
+import '../ui/widgets/common_ui.dart';
 
 class EntryScreen extends StatefulWidget {
   final List<AppEntry> entries;
@@ -153,7 +157,7 @@ class _EntryScreenState extends State<EntryScreen> {
                       color: AppColors.background,
                       child: NotificationListener<ScrollUpdateNotification>(
                         onNotification: (notification) {
-                          const double threshold = 45.0;
+                          const double threshold = 35.0;
                           final metrics = notification.metrics;
                           if (notification.dragDetails == null) return false;
                           if (metrics.pixels < -threshold)
@@ -189,6 +193,7 @@ class _EntryScreenState extends State<EntryScreen> {
                                   child: _buildAttributeDisplay(
                                     definition,
                                     value,
+                                    entry,
                                     widget.storage,
                                   ),
                                 );
@@ -208,6 +213,7 @@ class _EntryScreenState extends State<EntryScreen> {
   Widget _buildAttributeDisplay(
     AttributeDefinition def,
     dynamic value,
+    AppEntry entry,
     StorageService storage,
   ) {
     final bool isEmpty =
@@ -217,20 +223,74 @@ class _EntryScreenState extends State<EntryScreen> {
 
     if (def.type == AttributeValueType.image) {
       final bool hasUrl = !isEmpty;
+      final bool isLocal = hasUrl && !value.toString().startsWith('http');
+      final String? sourceUrl = entry.getAttribute('${def.key}_source');
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
             child: hasUrl
-                ? Image.network(
-                    value.toString(),
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (c, e, s) => _buildPlaceholder(),
+                ? GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        AppPageRoute(
+                          builder: (context) =>
+                              FullScreenImageScreen(imageUrl: value.toString()),
+                        ),
+                      );
+                    },
+                    child: isLocal
+                        ? Image.file(
+                            File(value.toString()),
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => _buildPlaceholder(),
+                          )
+                        : Image.network(
+                            value.toString(),
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => _buildPlaceholder(),
+                          ),
                   )
                 : _buildPlaceholder(),
           ),
+          if (hasUrl && sourceUrl != null && sourceUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: GestureDetector(
+                onTap: () async {
+                  final uri = Uri.tryParse(sourceUrl);
+                  if (uri != null && await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: Row(
+                  children: [
+                    const Icon(
+                      CupertinoIcons.globe,
+                      size: 14,
+                      color: AppColors.active,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        "Source: $sourceUrl",
+                        style: const TextStyle(
+                          color: AppColors.active,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       );
     }

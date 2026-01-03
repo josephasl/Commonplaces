@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../storage_service.dart';
 import '../../models.dart';
 import '../../attributes.dart';
@@ -93,7 +95,8 @@ Future<void> _showEntryDialog({
   for (var def in formAttributes) {
     if (def.key != 'tag' &&
         def.type != AttributeValueType.date &&
-        def.type != AttributeValueType.rating) {
+        def.type != AttributeValueType.rating &&
+        def.type != AttributeValueType.image) {
       textControllers[def.key] = TextEditingController(
         text: formValues[def.key]?.toString() ?? '',
       );
@@ -311,12 +314,17 @@ Widget _buildFlatFormSection({
             );
           }),
         ),
+      ] else if (def.type == AttributeValueType.image) ...[
+        _buildImageEditor(
+          context: context,
+          def: def,
+          formValues: formValues,
+          onStateChange: onStateChange,
+        ),
       ] else ...[
         CupertinoTextField(
           controller: textControllers[def.key],
-          placeholder: def.type == AttributeValueType.image
-              ? "Paste image URL"
-              : "Enter ${def.label.toLowerCase()}...",
+          placeholder: "Enter ${def.label.toLowerCase()}...",
           padding: const EdgeInsets.all(AppDimens.spacingM),
           maxLines: def.label.toLowerCase().contains('note') ? 4 : 1,
           keyboardType: def.type == AttributeValueType.number
@@ -332,5 +340,198 @@ Widget _buildFlatFormSection({
       ],
       const SizedBox(height: 24),
     ],
+  );
+}
+
+Widget _buildImageEditor({
+  required BuildContext context,
+  required AttributeDefinition def,
+  required Map<String, dynamic> formValues,
+  required VoidCallback onStateChange,
+}) {
+  final String? imageValue = formValues[def.key]?.toString();
+  final String? sourceValue = formValues['${def.key}_source']?.toString();
+  final bool hasImage = imageValue != null && imageValue.isNotEmpty;
+  final bool isLocal = hasImage && !imageValue.startsWith('http');
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (hasImage)
+        Stack(
+          children: [
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+                image: DecorationImage(
+                  image:
+                      (isLocal
+                              ? FileImage(File(imageValue))
+                              : NetworkImage(imageValue))
+                          as ImageProvider,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: () {
+                  formValues[def.key] = null;
+                  formValues['${def.key}_source'] = null;
+                  onStateChange();
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                ),
+              ),
+            ),
+            if (sourceValue != null && sourceValue.isNotEmpty)
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "Source: $sourceValue",
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        )
+      else
+        Container(
+          height: 120,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: AppColors.inputBackground,
+            borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+            border: Border.all(color: AppColors.border.withOpacity(0.2)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                CupertinoIcons.photo,
+                size: 32,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "No Image Selected",
+                style: TextStyle(
+                  color: AppColors.textSecondary.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              color: AppColors.inputBackground,
+              child: const Text(
+                "Paste Link",
+                style: TextStyle(color: AppColors.primary, fontSize: 14),
+              ),
+              onPressed: () => _showUrlInputDialog(context, (url, source) {
+                formValues[def.key] = url;
+                if (source != null && source.isNotEmpty) {
+                  formValues['${def.key}_source'] = source;
+                }
+                onStateChange();
+              }),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              color: AppColors.inputBackground,
+              child: const Text(
+                "Photos",
+                style: TextStyle(color: AppColors.primary, fontSize: 14),
+              ),
+              onPressed: () async {
+                final ImagePicker picker = ImagePicker();
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                );
+                if (image != null) {
+                  formValues[def.key] = image.path;
+                  formValues['${def.key}_source'] =
+                      null; // Clear source for local
+                  onStateChange();
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+void _showUrlInputDialog(
+  BuildContext context,
+  Function(String url, String? source) onConfirm,
+) {
+  final urlController = TextEditingController();
+
+  showCupertinoDialog(
+    context: context,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: const Text("Add Image from Web"),
+      content: Column(
+        children: [
+          const SizedBox(height: 16),
+          CupertinoTextField(
+            controller: urlController,
+            placeholder: "Image URL (Required)",
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel"),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: () {
+            if (urlController.text.isNotEmpty) {
+              onConfirm(urlController.text, urlController.text);
+              Navigator.pop(ctx);
+            }
+          },
+          child: const Text("Add"),
+        ),
+      ],
+    ),
   );
 }
