@@ -38,9 +38,9 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
     );
 
     _tabController.addListener(() {
+      setState(() {});
       if (!_tabController.indexIsChanging) {
         widget.storage.saveManageLibraryTabIndex(_tabController.index);
-        setState(() {});
       }
     });
   }
@@ -124,37 +124,12 @@ class ManageLibraryScreenState extends State<ManageLibraryScreen>
             top: 0,
             left: 0,
             right: 0,
-            child: Container(
-              height: 56, // 36 height + 10 top + 10 bottom padding
+            child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground,
-                  borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  dividerColor: Colors.transparent,
-                  indicator: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
-                        blurRadius: 3,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  labelColor: AppColors.textPrimary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  labelStyle: AppTextStyles.subHeader,
-                  tabs: const [
-                    Tab(text: "Stamps"),
-                    Tab(text: "Attributes"),
-                  ],
-                ),
+              child: AppSlidingSegmentedControl<int>(
+                groupValue: _tabController.index,
+                children: const {0: "Stamps", 1: "Attributes"},
+                onValueChanged: (index) => _tabController.animateTo(index),
               ),
             ),
           ),

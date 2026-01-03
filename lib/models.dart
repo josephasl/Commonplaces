@@ -132,6 +132,17 @@ class AppFolder {
   bool get sortAscending => (attributes['sortAscending'] as bool?) ?? false;
   int get iconIndex => (attributes['iconIndex'] as int?) ?? 0;
 
+  String get coverType => attributes['coverType']?.toString() ?? 'icon';
+  String get coverValue => attributes['coverValue']?.toString() ?? '0';
+
+  void setCover(String type, String value) {
+    attributes['coverType'] = type;
+    attributes['coverValue'] = value;
+  }
+
+  String get layout => attributes['layout']?.toString() ?? 'grid';
+  void setLayout(String val) => attributes['layout'] = val;
+
   void setSortPreferences(String key, bool ascending) {
     attributes['sortKey'] = key;
     attributes['sortAscending'] = ascending;

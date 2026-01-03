@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:reorderables/reorderables.dart';
 import '../../storage_service.dart';
 import '../../models.dart';
@@ -7,6 +9,7 @@ import '../../attributes.dart';
 import '../app_styles.dart';
 import '../widgets/base_bottom_sheet.dart';
 import '../widgets/delete_trigger_button.dart';
+import '../widgets/app_segmented_control.dart';
 import '../widgets/common_ui.dart';
 import 'confirm_dialog.dart';
 import 'tag_dialogs.dart';
@@ -49,6 +52,20 @@ Future<void> _showFolderDialog({
     text: isEditMode ? folderToEdit.getAttribute('title') : '',
   );
   int selectedIconIndex = isEditMode ? folderToEdit!.iconIndex : 0;
+  String selectedCoverType = isEditMode ? folderToEdit!.coverType : 'icon';
+  String selectedEmoji = (isEditMode && folderToEdit!.coverType == 'emoji')
+      ? folderToEdit!.coverValue
+      : '📁';
+  final TextEditingController emojiController = TextEditingController(
+    text: selectedEmoji,
+  );
+  String? selectedImagePath = (isEditMode && folderToEdit!.coverType == 'image')
+      ? folderToEdit!.coverValue
+      : null;
+  String? selectedImageSource = isEditMode
+      ? folderToEdit!.getAttribute('coverImageSource')
+      : null;
+  String selectedLayout = isEditMode ? folderToEdit!.layout : 'grid';
 
   return showCupertinoModalPopup(
     context: context,
@@ -122,6 +139,15 @@ Future<void> _showFolderDialog({
                 );
                 folder.setAttribute('displayTags', selectedTags);
                 folder.setAttribute('iconIndex', selectedIconIndex);
+                if (selectedCoverType == 'emoji') {
+                  folder.setCover('emoji', emojiController.text);
+                } else if (selectedCoverType == 'image') {
+                  folder.setCover('image', selectedImagePath ?? '');
+                  folder.setAttribute('coverImageSource', selectedImageSource);
+                } else {
+                  folder.setCover('icon', selectedIconIndex.toString());
+                }
+                folder.setLayout(selectedLayout);
                 List<String> newActiveList = [];
                 List<String> newVisibleList = [];
                 for (var def in sortedAttributes) {
@@ -138,11 +164,59 @@ Future<void> _showFolderDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Icon", style: AppTextStyles.label),
+                const Text("Cover", style: AppTextStyles.label),
                 const SizedBox(height: AppDimens.spacingS),
-                AppIconPicker(
-                  selectedIndex: selectedIconIndex,
-                  onSelect: (i) => setState(() => selectedIconIndex = i),
+                AppSlidingSegmentedControl<String>(
+                  groupValue: selectedCoverType,
+                  children: const {
+                    'icon': 'Icon',
+                    'emoji': 'Emoji',
+                    'image': 'Image',
+                  },
+                  onValueChanged: (val) {
+                    setState(() => selectedCoverType = val);
+                  },
+                ),
+                const SizedBox(height: AppDimens.spacingM),
+                if (selectedCoverType == 'icon')
+                  AppIconPicker(
+                    selectedIndex: selectedIconIndex,
+                    onSelect: (i) => setState(() => selectedIconIndex = i),
+                  )
+                else if (selectedCoverType == 'emoji')
+                  Center(
+                    child: SizedBox(
+                      width: 100,
+                      child: CupertinoTextField(
+                        controller: emojiController,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 40),
+                        maxLength: 1,
+                        decoration: AppDecorations.input,
+                      ),
+                    ),
+                  )
+                else if (selectedCoverType == 'image')
+                  _buildFolderImageEditor(
+                    context,
+                    selectedImagePath,
+                    selectedImageSource,
+                    (path, source) => setState(() {
+                      selectedImagePath = path;
+                      selectedImageSource = source;
+                    }),
+                  ),
+                const SizedBox(height: AppDimens.spacingL),
+                const Text("Layout", style: AppTextStyles.label),
+                const SizedBox(height: AppDimens.spacingS),
+                AppSlidingSegmentedControl<String>(
+                  groupValue: selectedLayout,
+                  children: const {
+                    'grid': 'Grid',
+                    'list': 'List',
+                    'board': 'Board',
+                  },
+                  onValueChanged: (val) => setState(() => selectedLayout = val),
                 ),
                 const SizedBox(height: AppDimens.spacingL),
                 const Text("Name", style: AppTextStyles.label),
@@ -409,5 +483,184 @@ Future<void> _showFolderDialog({
         },
       );
     },
+  );
+}
+
+Widget _buildFolderImageEditor(
+  BuildContext context,
+  String? imagePath,
+  String? imageSource,
+  Function(String? path, String? source) onUpdate,
+) {
+  final bool hasImage = imagePath != null && imagePath.isNotEmpty;
+  final bool isLocal = hasImage && !imagePath.startsWith('http');
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (hasImage)
+        Stack(
+          children: [
+            Container(
+              height: 200,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+                image: DecorationImage(
+                  image:
+                      (isLocal
+                              ? FileImage(File(imagePath))
+                              : NetworkImage(imagePath))
+                          as ImageProvider,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: () => onUpdate(null, null),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                ),
+              ),
+            ),
+            if (imageSource != null && imageSource.isNotEmpty)
+              Positioned(
+                bottom: 8,
+                left: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    "Source: $imageSource",
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        )
+      else
+        Container(
+          height: 120,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: AppColors.inputBackground,
+            borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+            border: Border.all(color: AppColors.border.withOpacity(0.2)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                CupertinoIcons.photo,
+                size: 32,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "No Image Selected",
+                style: TextStyle(
+                  color: AppColors.textSecondary.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              color: AppColors.inputBackground,
+              child: const Text(
+                "Paste Link",
+                style: TextStyle(color: AppColors.primary, fontSize: 14),
+              ),
+              onPressed: () => _showUrlInputDialog(context, (url, source) {
+                onUpdate(url, source);
+              }),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              color: AppColors.inputBackground,
+              child: const Text(
+                "Photos",
+                style: TextStyle(color: AppColors.primary, fontSize: 14),
+              ),
+              onPressed: () async {
+                final ImagePicker picker = ImagePicker();
+                final XFile? image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                );
+                if (image != null) {
+                  onUpdate(image.path, null);
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+void _showUrlInputDialog(
+  BuildContext context,
+  Function(String url, String? source) onConfirm,
+) {
+  final urlController = TextEditingController();
+  showCupertinoDialog(
+    context: context,
+    builder: (ctx) => CupertinoAlertDialog(
+      title: const Text("Add Image from Web"),
+      content: Column(
+        children: [
+          const SizedBox(height: 16),
+          CupertinoTextField(
+            controller: urlController,
+            placeholder: "Image URL (Required)",
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        CupertinoDialogAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text("Cancel"),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: () {
+            if (urlController.text.isNotEmpty) {
+              onConfirm(urlController.text, urlController.text);
+              Navigator.pop(ctx);
+            }
+          },
+          child: const Text("Add"),
+        ),
+      ],
+    ),
   );
 }

@@ -72,7 +72,7 @@ class _EntryScreenState extends State<EntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleKeys = widget.folder.visibleAttributes;
+    final visibleKeys = widget.folder.activeAttributes;
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
     final currentEntry =
@@ -157,7 +157,7 @@ class _EntryScreenState extends State<EntryScreen> {
                       color: AppColors.background,
                       child: NotificationListener<ScrollUpdateNotification>(
                         onNotification: (notification) {
-                          const double threshold = 35.0;
+                          const double threshold = 40.0;
                           final metrics = notification.metrics;
                           if (notification.dragDetails == null) return false;
                           if (metrics.pixels < -threshold)

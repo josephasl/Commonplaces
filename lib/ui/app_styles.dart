@@ -161,3 +161,15 @@ class AppDecorations {
     ),
   ];
 }
+
+// --- SHADERS ---
+class AppShaders {
+  static ShaderCallback maskFadeRight = (Rect bounds) {
+    return const LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [Colors.white, Colors.white, Colors.transparent],
+      stops: [0.0, 0.9, .98],
+    ).createShader(bounds);
+  };
+}

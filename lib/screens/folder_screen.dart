@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -7,8 +8,6 @@ import '../cards.dart';
 import '../dialogs.dart';
 import '../../attributes.dart';
 import '../ui/app_styles.dart';
-import 'entry_screen.dart';
-import '../ui/dialogs/sort_bottom_sheet.dart';
 import '../shakeable.dart';
 import '../ui/widgets/common_ui.dart';
 
@@ -36,12 +35,14 @@ class FolderScreenState extends State<FolderScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ScrollController _tagScrollController = ScrollController();
+  final ScrollController _horizontalScrollController = ScrollController();
   String _searchQuery = '';
   late String _sortAttributeKey;
   late bool _isAscending;
   String? _lastViewedEntryId;
   Offset _dragStart = Offset.zero;
   bool _isEditing = false;
+  bool _isNavigatingBack = false;
 
   void updateLastViewedEntry(String id) {
     _lastViewedEntryId = id;
@@ -75,18 +76,32 @@ class FolderScreenState extends State<FolderScreen> {
     _searchController.dispose();
     _scrollController.dispose();
     _tagScrollController.dispose();
+    _horizontalScrollController.dispose();
     super.dispose();
   }
 
   void handleNavTap() {
     if (!mounted) return;
+    bool didScroll = false;
     if (_scrollController.hasClients && _scrollController.offset > 0) {
       _scrollController.animateTo(
         0,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
-    } else if (widget.folder.id != 'untagged_special_id') {
+      didScroll = true;
+    }
+    if (_horizontalScrollController.hasClients &&
+        _horizontalScrollController.offset > 0) {
+      _horizontalScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+      didScroll = true;
+    }
+
+    if (!didScroll && widget.folder.id != 'untagged_special_id') {
       if (_activeTags.length < widget.folder.displayTags.length) {
         setState(() => _activeTags = Set.from(widget.folder.displayTags));
       }
@@ -237,10 +252,19 @@ class FolderScreenState extends State<FolderScreen> {
     });
 
     final visibleAttrs = widget.folder.visibleAttributes;
+    final isListLayout = widget.folder.layout == 'list';
+    double listWidth =
+        (AppDimens.paddingM * 2) +
+        (AppDimens.paddingL * 2); // Margins + Padding
+    for (var key in visibleAttrs) {
+      final def = registry[key];
+      if (def != null) listWidth += EntryRow.getColumnWidth(def);
+    }
 
     return Listener(
       onPointerDown: (event) => _dragStart = event.position,
       onPointerUp: (event) {
+        if (isListLayout) return;
         final delta = event.position - _dragStart;
         if (delta.dx < -50 && delta.dy.abs() < 50)
           _openLastViewedEntry(processedEntries);
@@ -289,6 +313,13 @@ class FolderScreenState extends State<FolderScreen> {
                     refresh,
                   );
                   final currentTags = widget.folder.displayTags;
+
+                  final currentTagSet = Set<String>.from(currentTags);
+                  if (previousTags.length != currentTagSet.length ||
+                      !previousTags.containsAll(currentTagSet)) {
+                    _lastViewedEntryId = null;
+                  }
+
                   final addedTags = currentTags.where(
                     (t) => !previousTags.contains(t),
                   );
@@ -304,55 +335,145 @@ class FolderScreenState extends State<FolderScreen> {
               onTap: () {
                 if (_isEditing) setState(() => _isEditing = false);
               },
-              child: MasonryGridView.count(
-                controller: _scrollController,
-                key: PageStorageKey('folder_grid_${widget.folder.id}'),
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                // Top padding allows scrolling BEHIND tags (if present)
-                padding: EdgeInsets.fromLTRB(
-                  8,
-                  widget.folder.displayTags.isNotEmpty ? 68 : 10,
-                  8,
-                  100,
-                ),
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                itemCount: processedEntries.length,
-                itemBuilder: (context, index) {
-                  final entry = processedEntries[index];
-
-                  return GestureDetector(
-                    onLongPress: () => setState(() => _isEditing = true),
-                    onTap: () {
-                      if (_isEditing) {
-                        setState(() => _isEditing = false);
-                      } else {
-                        updateLastViewedEntry(entry.id);
-                        widget.onEntryTap(processedEntries, index);
-                      }
-                    },
-                    child: ShakeableWithDelete(
-                      enabled: _isEditing,
-                      onDelete: () => _deleteEntry(entry),
-                      child: Hero(
-                        tag: 'entry_hero_${entry.id}',
-                        child: Material(
-                          color: Colors.transparent,
-                          child: EntryCard(
-                            entry: entry,
-                            visibleAttributes: visibleAttrs,
-                            tagColorResolver: widget.storage.getTagColor,
-                            registry: registry,
+              child: isListLayout
+                  ? NotificationListener<ScrollUpdateNotification>(
+                      onNotification: (notification) {
+                        if (notification.metrics.axis == Axis.horizontal &&
+                            notification.dragDetails != null &&
+                            !_isNavigatingBack) {
+                          if (notification.metrics.pixels < -20) {
+                            _isNavigatingBack = true;
+                            if (widget.onBack != null) {
+                              widget.onBack!();
+                            } else {
+                              Navigator.of(context).maybePop();
+                            }
+                            Future.delayed(
+                              const Duration(milliseconds: 500),
+                              () {
+                                if (mounted) _isNavigatingBack = false;
+                              },
+                            );
+                          } else if (notification.metrics.pixels >
+                              notification.metrics.maxScrollExtent + 20) {
+                            _isNavigatingBack = true;
+                            _openLastViewedEntry(processedEntries);
+                            Future.delayed(
+                              const Duration(milliseconds: 500),
+                              () {
+                                if (mounted) _isNavigatingBack = false;
+                              },
+                            );
+                          }
+                        }
+                        return false;
+                      },
+                      child: SingleChildScrollView(
+                        controller: _horizontalScrollController,
+                        physics: const AlwaysScrollableScrollPhysics(
+                          parent: BouncingScrollPhysics(),
+                        ),
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: math.max(
+                            MediaQuery.of(context).size.width,
+                            listWidth,
+                          ),
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            key: PageStorageKey(
+                              'folder_list_${widget.folder.id}',
+                            ),
+                            physics: const AlwaysScrollableScrollPhysics(
+                              parent: BouncingScrollPhysics(),
+                            ),
+                            padding: EdgeInsets.fromLTRB(
+                              0,
+                              widget.folder.displayTags.isNotEmpty ? 68 : 0,
+                              0,
+                              100,
+                            ),
+                            itemCount: processedEntries.length,
+                            itemBuilder: (context, index) {
+                              final entry = processedEntries[index];
+                              return GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onLongPress: () =>
+                                    setState(() => _isEditing = true),
+                                onTap: () {
+                                  if (_isEditing) {
+                                    setState(() => _isEditing = false);
+                                  } else {
+                                    updateLastViewedEntry(entry.id);
+                                    widget.onEntryTap(processedEntries, index);
+                                  }
+                                },
+                                child: ShakeableWithDelete(
+                                  enabled: _isEditing,
+                                  onDelete: () => _deleteEntry(entry),
+                                  child: EntryRow(
+                                    entry: entry,
+                                    visibleAttributes: visibleAttrs,
+                                    tagColorResolver:
+                                        widget.storage.getTagColor,
+                                    registry: registry,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
+                    )
+                  : MasonryGridView.count(
+                      controller: _scrollController,
+                      key: PageStorageKey('folder_grid_${widget.folder.id}'),
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      // Top padding allows scrolling BEHIND tags (if present)
+                      padding: EdgeInsets.fromLTRB(
+                        8,
+                        widget.folder.displayTags.isNotEmpty ? 68 : 10,
+                        8,
+                        100,
+                      ),
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      itemCount: processedEntries.length,
+                      itemBuilder: (context, index) {
+                        final entry = processedEntries[index];
+
+                        return GestureDetector(
+                          onLongPress: () => setState(() => _isEditing = true),
+                          onTap: () {
+                            if (_isEditing) {
+                              setState(() => _isEditing = false);
+                            } else {
+                              updateLastViewedEntry(entry.id);
+                              widget.onEntryTap(processedEntries, index);
+                            }
+                          },
+                          child: ShakeableWithDelete(
+                            enabled: _isEditing,
+                            onDelete: () => _deleteEntry(entry),
+                            child: Hero(
+                              tag: 'entry_hero_${entry.id}',
+                              child: Material(
+                                color: Colors.transparent,
+                                child: EntryCard(
+                                  entry: entry,
+                                  visibleAttributes: visibleAttrs,
+                                  tagColorResolver: widget.storage.getTagColor,
+                                  registry: registry,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
             if (widget.folder.displayTags.isNotEmpty)
               Positioned(
@@ -362,28 +483,32 @@ class FolderScreenState extends State<FolderScreen> {
                 child: Container(
                   height: 62,
                   padding: const EdgeInsets.only(top: 12, bottom: 12),
-                  child: ListView.separated(
-                    controller: _tagScrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: widget.folder.displayTags.length,
-                    separatorBuilder: (c, i) =>
-                        const SizedBox(width: AppDimens.spacingS),
-                    itemBuilder: (context, index) {
-                      final tag = widget.folder.displayTags[index];
-                      final isActive = _activeTags.contains(tag);
-                      final catColor = widget.storage.getTagColor(tag);
-                      return AppTagChip(
-                        label: tag,
-                        color: catColor,
-                        isActive: isActive,
-                        onTap: () => setState(
-                          () => isActive
-                              ? _activeTags.remove(tag)
-                              : _activeTags.add(tag),
-                        ),
-                      );
-                    },
+                  child: ShaderMask(
+                    shaderCallback: AppShaders.maskFadeRight,
+                    blendMode: BlendMode.dstIn,
+                    child: ListView.separated(
+                      controller: _tagScrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: widget.folder.displayTags.length,
+                      separatorBuilder: (c, i) =>
+                          const SizedBox(width: AppDimens.spacingS),
+                      itemBuilder: (context, index) {
+                        final tag = widget.folder.displayTags[index];
+                        final isActive = _activeTags.contains(tag);
+                        final catColor = widget.storage.getTagColor(tag);
+                        return AppTagChip(
+                          label: tag,
+                          color: catColor,
+                          isActive: isActive,
+                          onTap: () => setState(
+                            () => isActive
+                                ? _activeTags.remove(tag)
+                                : _activeTags.add(tag),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),

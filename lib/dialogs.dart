@@ -2,6 +2,7 @@
 export 'ui/widgets/attribute_selector.dart';
 export 'ui/widgets/base_bottom_sheet.dart';
 export 'ui/widgets/delete_trigger_button.dart'; // <--- NEW
+export 'ui/widgets/app_segmented_control.dart';
 
 // Export dialogs
 export 'ui/dialogs/folder_dialogs.dart';

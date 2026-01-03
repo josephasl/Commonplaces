@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late PageController _pageController;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _homeScrollController = ScrollController();
+  final ScrollController _categoryScrollController = ScrollController();
 
   final GlobalKey<ManageLibraryScreenState> _manageLibKey = GlobalKey();
   GlobalKey<FolderScreenState> _folderScreenKey = GlobalKey();
@@ -55,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pageController.dispose();
     _searchController.dispose();
     _homeScrollController.dispose();
+    _categoryScrollController.dispose();
     super.dispose();
   }
 
@@ -175,8 +177,18 @@ class _HomeScreenState extends State<HomeScreen> {
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOut,
           );
-        } else if (_selectedFilterCategoryId != 'ALL') {
-          setState(() => _selectedFilterCategoryId = 'ALL');
+        } else {
+          if (_selectedFilterCategoryId != 'ALL') {
+            setState(() => _selectedFilterCategoryId = 'ALL');
+          }
+          if (_categoryScrollController.hasClients &&
+              _categoryScrollController.offset > 0) {
+            _categoryScrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
         }
       } else if (index == 2) {
         if (_folderNavigatorKey.currentState?.canPop() ?? false) {
@@ -451,23 +463,33 @@ class _HomeScreenState extends State<HomeScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Row(
-                children: [
-                  _buildFilterChip('ALL', 'All', Colors.black, Icons.grid_view),
-                  ...categories
-                      .map(
-                        (cat) => _buildFilterChip(
-                          cat.id,
-                          cat.name,
-                          AppConstants.categoryColors[cat.colorIndex],
-                          AppConstants.categoryIcons[cat.iconIndex],
-                        ),
-                      )
-                      .toList(),
-                ],
+            child: ShaderMask(
+              shaderCallback: AppShaders.maskFadeRight,
+              blendMode: BlendMode.dstIn,
+              child: SingleChildScrollView(
+                controller: _categoryScrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Row(
+                  children: [
+                    _buildFilterChip(
+                      'ALL',
+                      'All',
+                      Colors.black,
+                      Icons.grid_view,
+                    ),
+                    ...categories
+                        .map(
+                          (cat) => _buildFilterChip(
+                            cat.id,
+                            cat.name,
+                            AppConstants.categoryColors[cat.colorIndex],
+                            AppConstants.categoryIcons[cat.iconIndex],
+                          ),
+                        )
+                        .toList(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -562,6 +584,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildFolderItem(AppFolder folder) {
     final count = _folderCounts[folder.id] ?? 0;
     final isUntaggedFolder = folder.id == 'untagged_special_id';
+    final coverImage = _storage.getFolderCoverImage(folder);
 
     if (isUntaggedFolder) {
       return GestureDetector(
@@ -590,6 +613,7 @@ class _HomeScreenState extends State<HomeScreen> {
           folder: folder,
           entryCount: count,
           tagColorResolver: _storage.getTagColor,
+          coverImageUrl: coverImage,
         ),
       ),
     );

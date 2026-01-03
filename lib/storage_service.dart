@@ -315,6 +315,13 @@ class StorageService {
     }).toList();
   }
 
+  String? getFolderCoverImage(AppFolder folder) {
+    if (folder.coverType != 'image') return null;
+    final val = folder.coverValue;
+    if (val == '0' || val.isEmpty) return null;
+    return val;
+  }
+
   // --- Global Tags ---
   List<String> getGlobalTags() =>
       _settingsBox
