@@ -40,7 +40,7 @@ class AttributeDefinition {
 const Map<String, AttributeDefinition> _systemAttributes = {
   "tag": AttributeDefinition(
     key: "tag",
-    label: "Tag",
+    label: "Stamp",
     type: AttributeValueType.text,
     applyType: AttributeApplyType.entriesOnly,
     isSystemField: true,

@@ -10,6 +10,7 @@ class EntryCard extends StatelessWidget {
   final List<String>? visibleAttributes;
   final Color Function(String)? tagColorResolver;
   final Map<String, AttributeDefinition> registry;
+  final bool isSelected;
 
   const EntryCard({
     super.key,
@@ -17,6 +18,7 @@ class EntryCard extends StatelessWidget {
     required this.registry,
     this.visibleAttributes,
     this.tagColorResolver,
+    this.isSelected = false,
   });
 
   @override
@@ -26,7 +28,12 @@ class EntryCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 60),
-      decoration: AppDecorations.card,
+      decoration: AppDecorations.card.copyWith(
+        border: Border.all(
+          color: isSelected ? AppColors.active : Colors.transparent,
+          width: 2,
+        ),
+      ),
       padding: const EdgeInsets.all(AppDimens.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,14 +43,18 @@ class EntryCard extends StatelessWidget {
           final value = entry.getAttribute(key);
           return Padding(
             padding: const EdgeInsets.only(bottom: 6.0),
-            child: _buildAttributeRenderer(definition, value),
+            child: _buildAttributeRenderer(context, definition, value),
           );
         }).toList(),
       ),
     );
   }
 
-  Widget _buildAttributeRenderer(AttributeDefinition def, dynamic value) {
+  Widget _buildAttributeRenderer(
+    BuildContext context,
+    AttributeDefinition def,
+    dynamic value,
+  ) {
     final bool isEmpty =
         value == null ||
         value.toString().isEmpty ||
@@ -139,8 +150,7 @@ class EntryCard extends StatelessWidget {
         else if (value is String)
           d = DateTime.tryParse(value);
         if (d != null)
-          dateStr =
-              "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+          dateStr = MaterialLocalizations.of(context).formatCompactDate(d);
         else
           dateStr = value.toString();
       }
@@ -238,6 +248,7 @@ class FolderCard extends StatelessWidget {
     final bg = isOverride ? color! : baseColor.withOpacity(0.15);
     final fg = isOverride ? Colors.grey.shade600 : baseColor;
     final bool isImageCover = folder.coverType == 'image';
+    final bool showCount = folder.showEntryCount;
 
     return Container(
       width: double.infinity,
@@ -286,34 +297,35 @@ class FolderCard extends StatelessWidget {
                           ),
                         ),
                 ),
-                Positioned(
-                  top: AppDimens.paddingM,
-                  right: AppDimens.paddingM,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(
-                        AppDimens.cornerRadius,
+                if (showCount)
+                  Positioned(
+                    top: AppDimens.paddingM,
+                    right: AppDimens.paddingM,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
                       ),
-                    ),
-                    child: Text(
-                      "$entryCount",
-                      style: AppTextStyles.countLabel.copyWith(
-                        color: Colors.black.withOpacity(0.8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(
+                          AppDimens.cornerRadius,
+                        ),
+                      ),
+                      child: Text(
+                        "$entryCount",
+                        style: AppTextStyles.countLabel.copyWith(
+                          color: Colors.black.withOpacity(0.8),
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           Padding(
             padding: EdgeInsets.fromLTRB(
               AppDimens.paddingM,
-              isImageCover ? AppDimens.spacingM : AppDimens.paddingM,
+              isImageCover ? AppDimens.spacingM * .75 : AppDimens.paddingM,
               AppDimens.paddingM,
               AppDimens.paddingM,
             ),
@@ -336,27 +348,28 @@ class FolderCard extends StatelessWidget {
                           size: 32,
                           color: fg,
                         ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(
-                            AppDimens.cornerRadius,
+                      if (showCount)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.cornerRadius,
+                            ),
+                          ),
+                          child: Text(
+                            "$entryCount",
+                            style: AppTextStyles.countLabel.copyWith(
+                              color: fg.withOpacity(0.8),
+                            ),
                           ),
                         ),
-                        child: Text(
-                          "$entryCount",
-                          style: AppTextStyles.countLabel.copyWith(
-                            color: fg.withOpacity(0.8),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
-                  const SizedBox(height: AppDimens.spacingM),
+                  const SizedBox(height: AppDimens.spacingS),
                 ],
                 Text(
                   folder.getAttribute<String>('title') ?? "Untitled",
@@ -413,19 +426,20 @@ class EntryRow extends StatelessWidget {
   final List<String>? visibleAttributes;
   final Color Function(String)? tagColorResolver;
   final Map<String, AttributeDefinition> registry;
+  final bool isSelected;
 
   static double getColumnWidth(AttributeDefinition def) {
     switch (def.type) {
       case AttributeValueType.image:
         return 60.0;
       case AttributeValueType.date:
-        return 110.0;
+        return 105.0;
       case AttributeValueType.rating:
-        return 90.0;
+        return 60.0;
       case AttributeValueType.number:
         return 100.0;
       default:
-        return 160.0;
+        return 130.0;
     }
   }
 
@@ -435,6 +449,7 @@ class EntryRow extends StatelessWidget {
     required this.registry,
     this.visibleAttributes,
     this.tagColorResolver,
+    this.isSelected = false,
   });
 
   @override
@@ -450,11 +465,17 @@ class EntryRow extends StatelessWidget {
       ),
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: isSelected
+            ? AppColors.active.withOpacity(0.1)
+            : AppColors.background,
         borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+        border: Border.all(
+          color: isSelected ? AppColors.active : Colors.transparent,
+          width: 2,
+        ),
       ),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.paddingL,
+        horizontal: AppDimens.paddingM,
         vertical: AppDimens.paddingS,
       ),
       child: Row(
@@ -468,8 +489,8 @@ class EntryRow extends StatelessWidget {
           return SizedBox(
             width: getColumnWidth(definition),
             child: Padding(
-              padding: EdgeInsets.only(right: isLast ? 0 : AppDimens.paddingM),
-              child: _buildAttributeRenderer(definition, value),
+              padding: EdgeInsets.only(right: isLast ? 0 : 2),
+              child: _buildAttributeRenderer(context, definition, value),
             ),
           );
         }).toList(),
@@ -477,7 +498,11 @@ class EntryRow extends StatelessWidget {
     );
   }
 
-  Widget _buildAttributeRenderer(AttributeDefinition def, dynamic value) {
+  Widget _buildAttributeRenderer(
+    BuildContext context,
+    AttributeDefinition def,
+    dynamic value,
+  ) {
     final bool isEmpty =
         value == null ||
         value.toString().isEmpty ||
@@ -621,8 +646,7 @@ class EntryRow extends StatelessWidget {
         else if (value is String)
           d = DateTime.tryParse(value);
         if (d != null)
-          dateStr =
-              "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+          dateStr = MaterialLocalizations.of(context).formatCompactDate(d);
         else
           dateStr = value.toString();
       }

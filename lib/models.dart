@@ -132,6 +132,9 @@ class AppFolder {
   bool get sortAscending => (attributes['sortAscending'] as bool?) ?? false;
   int get iconIndex => (attributes['iconIndex'] as int?) ?? 0;
 
+  bool get showEntryCount => (attributes['showEntryCount'] as bool?) ?? true;
+  void setShowEntryCount(bool val) => attributes['showEntryCount'] = val;
+
   String get coverType => attributes['coverType']?.toString() ?? 'icon';
   String get coverValue => attributes['coverValue']?.toString() ?? '0';
 

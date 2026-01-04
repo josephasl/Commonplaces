@@ -25,20 +25,19 @@ Future<SortResult?> showUnifiedSortSheet({
   return showCupertinoModalPopup<SortResult>(
     context: context,
     builder: (ctx) => CupertinoActionSheet(
-      title: Text(title, style: AppTextStyles.subHeader),
-      message: const Text(
-        "Tap the same option again to reverse order",
-        style: AppTextStyles.caption,
-      ),
       actions: options.map((item) {
         final isSelected = item.key == currentSortKey;
 
         // Determine the icon and direction for the next tap
         IconData? icon;
         if (isSelected) {
-          icon = currentIsAscending
-              ? CupertinoIcons.arrow_up
-              : CupertinoIcons.arrow_down;
+          if (item.key == 'random') {
+            icon = CupertinoIcons.arrow_2_circlepath;
+          } else {
+            icon = currentIsAscending
+                ? CupertinoIcons.arrow_up
+                : CupertinoIcons.arrow_down;
+          }
         }
 
         return CupertinoActionSheetAction(
@@ -53,7 +52,11 @@ Future<SortResult?> showUnifiedSortSheet({
             bool nextAscending = true;
 
             if (isSelected) {
-              nextAscending = !currentIsAscending;
+              if (item.key == 'random') {
+                nextAscending = true;
+              } else {
+                nextAscending = !currentIsAscending;
+              }
             } else {
               // OPTIONAL: Smart defaults based on key names
               // If it's a date or count, usually users want Descending (High->Low) first

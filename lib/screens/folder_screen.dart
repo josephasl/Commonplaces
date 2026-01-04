@@ -43,6 +43,10 @@ class FolderScreenState extends State<FolderScreen> {
   Offset _dragStart = Offset.zero;
   bool _isEditing = false;
   bool _isNavigatingBack = false;
+  bool _isSelectionMode = false;
+  Set<String> _selectedEntryIds = {};
+  Map<String, int> _randomSortValues = {};
+  int _sortSeed = 0;
 
   void updateLastViewedEntry(String id) {
     _lastViewedEntryId = id;
@@ -50,6 +54,11 @@ class FolderScreenState extends State<FolderScreen> {
 
   void stopEditing() {
     if (_isEditing) setState(() => _isEditing = false);
+    if (_isSelectionMode)
+      setState(() {
+        _isSelectionMode = false;
+        _selectedEntryIds.clear();
+      });
   }
 
   @override
@@ -65,10 +74,30 @@ class FolderScreenState extends State<FolderScreen> {
 
     if (!widget.folder.activeAttributes.contains(_sortAttributeKey) &&
         _sortAttributeKey != 'dateCreated' &&
+        _sortAttributeKey != 'random' &&
         widget.folder.activeAttributes.isNotEmpty) {
       _sortAttributeKey = widget.folder.activeAttributes.first;
     }
-    refresh();
+
+    // Initial data load
+    if (widget.folder.id == 'untagged_special_id') {
+      _allFolderEntries = widget.storage.getUntaggedEntries();
+    } else {
+      _allFolderEntries = widget.storage.getEntriesForFolder(widget.folder);
+    }
+
+    if (widget.folder.id != 'untagged_special_id') {
+      final currentTags = widget.folder.displayTags;
+      _activeTags = _activeTags.intersection(currentTags.toSet());
+      if (_activeTags.isEmpty && currentTags.isNotEmpty) {
+        _activeTags = currentTags.toSet();
+      }
+    }
+
+    // FIX 1: Generate values immediately in initState if needed
+    if (_sortAttributeKey == 'random') {
+      _regenerateRandomValues();
+    }
   }
 
   @override
@@ -100,7 +129,6 @@ class FolderScreenState extends State<FolderScreen> {
       );
       didScroll = true;
     }
-
     if (!didScroll && widget.folder.id != 'untagged_special_id') {
       if (_activeTags.length < widget.folder.displayTags.length) {
         setState(() => _activeTags = Set.from(widget.folder.displayTags));
@@ -132,16 +160,43 @@ class FolderScreenState extends State<FolderScreen> {
             _activeTags = currentTags.toSet();
           }
         }
+        // FIX 2: Regenerate on refresh if mode is random
+        if (_sortAttributeKey == 'random') {
+          _reconcileRandomValues();
+        }
       });
     } else {
       _allFolderEntries = entries;
     }
   }
 
+  void _reconcileRandomValues() {
+    final currentIds = _allFolderEntries.map((e) => e.id).toSet();
+    _randomSortValues.removeWhere((id, _) => !currentIds.contains(id));
+
+    int maxVal = _randomSortValues.isEmpty
+        ? 0
+        : _randomSortValues.values.reduce(math.max);
+
+    for (var entry in _allFolderEntries) {
+      if (!_randomSortValues.containsKey(entry.id)) {
+        maxVal++;
+        _randomSortValues[entry.id] = maxVal;
+      }
+    }
+  }
+
+  void _regenerateRandomValues() {
+    var entries = List<AppEntry>.from(_allFolderEntries);
+    entries.shuffle();
+    _randomSortValues = {
+      for (var i = 0; i < entries.length; i++) entries[i].id: i,
+    };
+  }
+
   Future<void> _showSortSheet() async {
     final customAttrs = widget.storage.getCustomAttributes();
     final registry = getAttributeRegistry(customAttrs);
-
     final List<SortOptionItem> options = widget.folder.activeAttributes
         .map((key) {
           final def = registry[key];
@@ -150,7 +205,7 @@ class FolderScreenState extends State<FolderScreen> {
         })
         .whereType<SortOptionItem>()
         .toList();
-
+    options.add(const SortOptionItem('random', 'Random'));
     if (options.isEmpty) return;
 
     final result = await showUnifiedSortSheet(
@@ -163,9 +218,18 @@ class FolderScreenState extends State<FolderScreen> {
 
     if (result != null && mounted) {
       setState(() {
-        _sortAttributeKey = result.key;
-        _isAscending = result.isAscending;
+        if (result.key == 'random') {
+          _sortAttributeKey = 'random';
+          _isAscending = true;
+          _regenerateRandomValues(); // This updates the map
+          _sortSeed++;
+        } else {
+          _sortAttributeKey = result.key;
+          _isAscending = result.isAscending;
+        }
       });
+      // The setState above forces build -> sort -> updated view.
+      // We do NOT need to change the PageStorageKey.
 
       if (widget.folder.id != 'untagged_special_id') {
         widget.folder.setSortPreferences(_sortAttributeKey, _isAscending);
@@ -190,6 +254,17 @@ class FolderScreenState extends State<FolderScreen> {
         refresh();
       },
     );
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedEntryIds.contains(id)) {
+        _selectedEntryIds.remove(id);
+      } else {
+        _selectedEntryIds.add(id);
+        _isSelectionMode = true;
+      }
+    });
   }
 
   @override
@@ -221,11 +296,21 @@ class FolderScreenState extends State<FolderScreen> {
       }).toList();
     }
 
+    // FIX 3: Removed the "lazy" regeneration check here.
+    // We rely on initState, refresh, and _showSortSheet to handle it.
+
     processedEntries.sort((a, b) {
+      if (_sortAttributeKey == 'random') {
+        final rA = _randomSortValues[a.id] ?? 0;
+        final rB = _randomSortValues[b.id] ?? 0;
+        return rA.compareTo(rB);
+      }
+
       final def = registry[_sortAttributeKey];
       dynamic valA = a.getAttribute(_sortAttributeKey);
       dynamic valB = b.getAttribute(_sortAttributeKey);
       int result = 0;
+
       if (valA == null && valB == null) return 0;
       if (valA == null) return _isAscending ? -1 : 1;
       if (valB == null) return _isAscending ? 1 : -1;
@@ -253,13 +338,15 @@ class FolderScreenState extends State<FolderScreen> {
 
     final visibleAttrs = widget.folder.visibleAttributes;
     final isListLayout = widget.folder.layout == 'list';
-    double listWidth =
-        (AppDimens.paddingM * 2) +
-        (AppDimens.paddingL * 2); // Margins + Padding
+    double listWidth = (AppDimens.paddingM * 2) + (AppDimens.paddingL * 2);
     for (var key in visibleAttrs) {
       final def = registry[key];
       if (def != null) listWidth += EntryRow.getColumnWidth(def);
     }
+
+    final pageKey = PageStorageKey(
+      'folder_${isListLayout ? 'list' : 'grid'}_${widget.folder.id}_$_sortSeed',
+    );
 
     return Listener(
       onPointerDown: (event) => _dragStart = event.position,
@@ -271,10 +358,36 @@ class FolderScreenState extends State<FolderScreen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.coloredBackground,
-
         appBar: AppBar(
+          leadingWidth: _isSelectionMode ? 100 : null,
+          leading: _isSelectionMode
+              ? Align(
+                  alignment: Alignment.centerLeft,
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      "Cancel",
+                      style: AppTextStyles.button.copyWith(
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    onPressed: () => setState(() {
+                      _isSelectionMode = false;
+                      _selectedEntryIds.clear();
+                    }),
+                  ),
+                )
+              : IconButton(
+                  icon: const Icon(
+                    CupertinoIcons.checkmark_circle,
+                    color: AppColors.primary,
+                  ),
+                  onPressed: () => setState(() => _isSelectionMode = true),
+                ),
           title: Text(
-            widget.folder.getAttribute<String>('title') ?? "Folder",
+            _isSelectionMode
+                ? "Select Items"
+                : (widget.folder.getAttribute<String>('title') ?? "Folder"),
             style: AppTextStyles.header,
           ),
           backgroundColor: Colors.white,
@@ -286,12 +399,43 @@ class FolderScreenState extends State<FolderScreen> {
             child: Container(color: AppColors.divider, height: 1.0),
           ),
           actions: [
-            if (_isEditing)
+            if (_isSelectionMode)
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: const Text(
+                onPressed: _selectedEntryIds.isEmpty
+                    ? null
+                    : () {
+                        final selectedEntries = processedEntries
+                            .where((e) => _selectedEntryIds.contains(e.id))
+                            .toList();
+                        showEditMultipleEntriesDialog(
+                          context,
+                          selectedEntries,
+                          widget.storage,
+                          () {
+                            setState(() {
+                              _isSelectionMode = false;
+                              _selectedEntryIds.clear();
+                            });
+                            refresh();
+                          },
+                        );
+                      },
+                child: Text(
+                  "Edit (${_selectedEntryIds.length})",
+                  style: AppTextStyles.button.copyWith(
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              )
+            else if (_isEditing)
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
                   "Done",
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  style: AppTextStyles.button.copyWith(
+                    fontWeight: FontWeight.normal,
+                  ),
                 ),
                 onPressed: () => setState(() => _isEditing = false),
               )
@@ -313,13 +457,11 @@ class FolderScreenState extends State<FolderScreen> {
                     refresh,
                   );
                   final currentTags = widget.folder.displayTags;
-
                   final currentTagSet = Set<String>.from(currentTags);
                   if (previousTags.length != currentTagSet.length ||
                       !previousTags.containsAll(currentTagSet)) {
                     _lastViewedEntryId = null;
                   }
-
                   final addedTags = currentTags.where(
                     (t) => !previousTags.contains(t),
                   );
@@ -333,7 +475,8 @@ class FolderScreenState extends State<FolderScreen> {
           children: [
             GestureDetector(
               onTap: () {
-                if (_isEditing) setState(() => _isEditing = false);
+                if (_isEditing && !_isSelectionMode)
+                  setState(() => _isEditing = false);
               },
               child: isListLayout
                   ? NotificationListener<ScrollUpdateNotification>(
@@ -381,9 +524,7 @@ class FolderScreenState extends State<FolderScreen> {
                           ),
                           child: ListView.builder(
                             controller: _scrollController,
-                            key: PageStorageKey(
-                              'folder_list_${widget.folder.id}',
-                            ),
+                            key: pageKey, // Stable Key
                             physics: const AlwaysScrollableScrollPhysics(
                               parent: BouncingScrollPhysics(),
                             ),
@@ -396,12 +537,18 @@ class FolderScreenState extends State<FolderScreen> {
                             itemCount: processedEntries.length,
                             itemBuilder: (context, index) {
                               final entry = processedEntries[index];
+                              final isSelected = _selectedEntryIds.contains(
+                                entry.id,
+                              );
                               return GestureDetector(
+                                key: ValueKey(entry.id),
                                 behavior: HitTestBehavior.opaque,
                                 onLongPress: () =>
                                     setState(() => _isEditing = true),
                                 onTap: () {
-                                  if (_isEditing) {
+                                  if (_isSelectionMode) {
+                                    _toggleSelection(entry.id);
+                                  } else if (_isEditing) {
                                     setState(() => _isEditing = false);
                                   } else {
                                     updateLastViewedEntry(entry.id);
@@ -409,10 +556,11 @@ class FolderScreenState extends State<FolderScreen> {
                                   }
                                 },
                                 child: ShakeableWithDelete(
-                                  enabled: _isEditing,
+                                  enabled: _isEditing && !_isSelectionMode,
                                   onDelete: () => _deleteEntry(entry),
                                   child: EntryRow(
                                     entry: entry,
+                                    isSelected: isSelected,
                                     visibleAttributes: visibleAttrs,
                                     tagColorResolver:
                                         widget.storage.getTagColor,
@@ -427,11 +575,10 @@ class FolderScreenState extends State<FolderScreen> {
                     )
                   : MasonryGridView.count(
                       controller: _scrollController,
-                      key: PageStorageKey('folder_grid_${widget.folder.id}'),
+                      key: pageKey, // Stable Key
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
-                      // Top padding allows scrolling BEHIND tags (if present)
                       padding: EdgeInsets.fromLTRB(
                         8,
                         widget.folder.displayTags.isNotEmpty ? 68 : 10,
@@ -444,11 +591,14 @@ class FolderScreenState extends State<FolderScreen> {
                       itemCount: processedEntries.length,
                       itemBuilder: (context, index) {
                         final entry = processedEntries[index];
-
+                        final isSelected = _selectedEntryIds.contains(entry.id);
                         return GestureDetector(
+                          key: ValueKey(entry.id),
                           onLongPress: () => setState(() => _isEditing = true),
                           onTap: () {
-                            if (_isEditing) {
+                            if (_isSelectionMode) {
+                              _toggleSelection(entry.id);
+                            } else if (_isEditing) {
                               setState(() => _isEditing = false);
                             } else {
                               updateLastViewedEntry(entry.id);
@@ -456,7 +606,7 @@ class FolderScreenState extends State<FolderScreen> {
                             }
                           },
                           child: ShakeableWithDelete(
-                            enabled: _isEditing,
+                            enabled: _isEditing && !_isSelectionMode,
                             onDelete: () => _deleteEntry(entry),
                             child: Hero(
                               tag: 'entry_hero_${entry.id}',
@@ -464,6 +614,7 @@ class FolderScreenState extends State<FolderScreen> {
                                 color: Colors.transparent,
                                 child: EntryCard(
                                   entry: entry,
+                                  isSelected: isSelected,
                                   visibleAttributes: visibleAttrs,
                                   tagColorResolver: widget.storage.getTagColor,
                                   registry: registry,
@@ -536,25 +687,27 @@ class FolderScreenState extends State<FolderScreen> {
                     icon: CupertinoIcons.sort_down,
                     onTap: _showSortSheet,
                   ),
-                  const SizedBox(width: AppDimens.spacingM),
-                  AppFloatingButton(
-                    icon: CupertinoIcons.add,
-                    color: AppColors.primary,
-                    iconColor: Colors.white,
-                    onTap: () async {
-                      List<String>? prefillTags;
-                      if (widget.folder.displayTags.isNotEmpty)
-                        prefillTags = List.from(widget.folder.displayTags);
-                      await showAddEntryDialog(
-                        context,
-                        widget.storage,
-                        refresh,
-                        prefillTags: prefillTags,
-                        folderContext: widget.folder,
-                      );
-                      refresh();
-                    },
-                  ),
+                  if (!_isSelectionMode) ...[
+                    const SizedBox(width: AppDimens.spacingM),
+                    AppFloatingButton(
+                      icon: CupertinoIcons.add,
+                      color: AppColors.primary,
+                      iconColor: Colors.white,
+                      onTap: () async {
+                        List<String>? prefillTags;
+                        if (widget.folder.displayTags.isNotEmpty)
+                          prefillTags = List.from(widget.folder.displayTags);
+                        await showAddEntryDialog(
+                          context,
+                          widget.storage,
+                          refresh,
+                          prefillTags: prefillTags,
+                          folderContext: widget.folder,
+                        );
+                        refresh();
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),

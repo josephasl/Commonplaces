@@ -173,9 +173,9 @@ class _EntryScreenState extends State<EntryScreen> {
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
                             padding: const EdgeInsets.fromLTRB(
-                              AppDimens.paddingL,
-                              AppDimens.paddingL,
-                              AppDimens.paddingL,
+                              AppDimens.paddingS,
+                              AppDimens.paddingS,
+                              AppDimens.paddingS,
                               100,
                             ),
                             child: Column(
@@ -188,7 +188,7 @@ class _EntryScreenState extends State<EntryScreen> {
                                 final value = entry.getAttribute(key);
                                 return Padding(
                                   padding: const EdgeInsets.only(
-                                    bottom: AppDimens.paddingL,
+                                    bottom: AppDimens.paddingM,
                                   ),
                                   child: _buildAttributeDisplay(
                                     definition,
@@ -230,7 +230,7 @@ class _EntryScreenState extends State<EntryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
+            //  borderRadius: BorderRadius.circular(AppDimens.cornerRadiusLess),
             child: hasUrl
                 ? GestureDetector(
                     onTap: () {
@@ -373,8 +373,7 @@ class _EntryScreenState extends State<EntryScreen> {
         else if (value is String)
           d = DateTime.tryParse(value);
         if (d != null)
-          dateStr =
-              "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+          dateStr = MaterialLocalizations.of(context).formatCompactDate(d);
         else
           dateStr = value.toString();
       }
@@ -413,7 +412,7 @@ class _EntryScreenState extends State<EntryScreen> {
       height: 200,
       decoration: BoxDecoration(
         color: AppColors.inputBackground,
-        borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
+        //borderRadius: BorderRadius.circular(AppDimens.cornerRadius),
         border: Border.all(color: AppColors.border.withOpacity(0.2)),
       ),
       child: Column(

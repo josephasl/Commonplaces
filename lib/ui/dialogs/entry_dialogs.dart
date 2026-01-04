@@ -53,6 +53,115 @@ Future<void> showEditEntryDialog(
   );
 }
 
+Future<void> showEditMultipleEntriesDialog(
+  BuildContext context,
+  List<AppEntry> entries,
+  StorageService storage,
+  VoidCallback onUpdate,
+) {
+  // Calculate union of tags
+  final Set<String> initialTags = {};
+  for (var e in entries) {
+    final raw = e.getAttribute('tag');
+    if (raw is String) initialTags.add(raw);
+    if (raw is List) initialTags.addAll(List<String>.from(raw));
+  }
+
+  final List<String> currentTags = List.from(initialTags);
+  final Map<String, dynamic> formValues = {'tag': currentTags};
+  final TextEditingController tagSearchController = TextEditingController();
+
+  return showCupertinoModalPopup(
+    context: context,
+    builder: (context) {
+      String tagSearchQuery = '';
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final allTags = storage.getGlobalTags();
+          final visibleTags = allTags
+              .where(
+                (tag) =>
+                    tag.toLowerCase().contains(tagSearchQuery.toLowerCase()),
+              )
+              .toList();
+
+          return BaseBottomSheet(
+            title: "Edit ${entries.length} Entries",
+            onSave: () async {
+              final updatedTags = List<String>.from(formValues['tag'] ?? []);
+              final addedTags = updatedTags
+                  .where((t) => !initialTags.contains(t))
+                  .toSet();
+              final removedTags = initialTags
+                  .where((t) => !updatedTags.contains(t))
+                  .toSet();
+
+              for (var entry in entries) {
+                final raw = entry.getAttribute('tag');
+                final Set<String> entryTags = {};
+                if (raw is String) entryTags.add(raw);
+                if (raw is List) entryTags.addAll(List<String>.from(raw));
+
+                entryTags.addAll(addedTags);
+                entryTags.removeAll(removedTags);
+
+                entry.setAttribute('tag', entryTags.toList());
+                await storage.saveEntry(entry);
+              }
+              onUpdate();
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildFlatFormSection(
+                  context: context,
+                  def: const AttributeDefinition(
+                    key: 'tag',
+                    label: 'Tags (Applied to All)',
+                    type: AttributeValueType.text,
+                    applyType: AttributeApplyType.entriesOnly,
+                  ),
+                  formValues: formValues,
+                  textControllers: {},
+                  storage: storage,
+                  visibleTags: visibleTags,
+                  tagSearchController: tagSearchController,
+                  onTagQueryChanged: (val) =>
+                      setState(() => tagSearchQuery = val),
+                  onStateChange: () => setState(() {}),
+                ),
+                const SizedBox(height: 32),
+                DeleteTriggerButton(
+                  label: "Delete ${entries.length} Entries",
+                  onPressed: () {
+                    showDeleteConfirmationDialog(
+                      context: context,
+                      title: "Delete Entries?",
+                      message: "Delete ${entries.length} selected entries?",
+                      subtitle: "This action cannot be undone.",
+                      onConfirm: () async {
+                        for (var e in entries) {
+                          await storage.deleteEntry(e.id);
+                        }
+                        if (context.mounted) {
+                          Navigator.pop(context); // Close edit dialog
+                          onUpdate();
+                        }
+                      },
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
 Future<void> _showEntryDialog({
   required BuildContext context,
   required StorageService storage,

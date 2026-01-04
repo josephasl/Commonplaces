@@ -66,6 +66,7 @@ Future<void> _showFolderDialog({
       ? folderToEdit!.getAttribute('coverImageSource')
       : null;
   String selectedLayout = isEditMode ? folderToEdit!.layout : 'grid';
+  bool showEntryCount = isEditMode ? folderToEdit!.showEntryCount : true;
 
   return showCupertinoModalPopup(
     context: context,
@@ -147,6 +148,7 @@ Future<void> _showFolderDialog({
                 } else {
                   folder.setCover('icon', selectedIconIndex.toString());
                 }
+                folder.setShowEntryCount(showEntryCount);
                 folder.setLayout(selectedLayout);
                 List<String> newActiveList = [];
                 List<String> newVisibleList = [];
@@ -164,6 +166,16 @@ Future<void> _showFolderDialog({
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text("Name", style: AppTextStyles.label),
+                const SizedBox(height: 8),
+                CupertinoTextField(
+                  controller: titleController,
+                  placeholder: "New folder",
+                  padding: const EdgeInsets.all(AppDimens.spacingM),
+                  decoration: AppDecorations.input,
+                  style: AppTextStyles.body,
+                ),
+                const SizedBox(height: AppDimens.spacingL),
                 const Text("Cover", style: AppTextStyles.label),
                 const SizedBox(height: AppDimens.spacingS),
                 AppSlidingSegmentedControl<String>(
@@ -206,7 +218,20 @@ Future<void> _showFolderDialog({
                       selectedImageSource = source;
                     }),
                   ),
-                const SizedBox(height: AppDimens.spacingL),
+                const SizedBox(height: AppDimens.spacingM),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("Show Entry Count", style: AppTextStyles.label),
+                    CupertinoCheckbox(
+                      value: showEntryCount,
+                      activeColor: AppColors.active,
+                      onChanged: (val) =>
+                          setState(() => showEntryCount = val ?? false),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimens.spacingM),
                 const Text("Layout", style: AppTextStyles.label),
                 const SizedBox(height: AppDimens.spacingS),
                 AppSlidingSegmentedControl<String>(
@@ -218,17 +243,7 @@ Future<void> _showFolderDialog({
                   },
                   onValueChanged: (val) => setState(() => selectedLayout = val),
                 ),
-                const SizedBox(height: AppDimens.spacingL),
-                const Text("Name", style: AppTextStyles.label),
-                const SizedBox(height: 8),
-                CupertinoTextField(
-                  controller: titleController,
-                  placeholder: "New folder",
-                  padding: const EdgeInsets.all(AppDimens.spacingM),
-                  decoration: AppDecorations.input,
-                  style: AppTextStyles.body,
-                ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppDimens.spacingM),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -308,7 +323,7 @@ Future<void> _showFolderDialog({
                       );
                     }).toList(),
                   ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppDimens.spacingM),
                 const Row(
                   children: [
                     Expanded(

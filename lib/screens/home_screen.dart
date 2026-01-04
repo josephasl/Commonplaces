@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -44,6 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, int> _folderCounts = {};
   AppFolder? _lastOpenedFolder;
 
+  final Map<String, int> _randomSortValues = {};
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +71,14 @@ class _HomeScreenState extends State<HomeScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _pagePhysics = newPhysics);
       });
+    }
+  }
+
+  void _regenerateRandomValues() {
+    final rng = math.Random();
+    _randomSortValues.clear();
+    for (var f in _folders) {
+      _randomSortValues[f.id] = rng.nextInt(100000000);
     }
   }
 
@@ -111,6 +122,10 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       }
+
+      if (_folderSortKey == 'random') {
+        _regenerateRandomValues();
+      }
     });
   }
 
@@ -129,10 +144,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showFolderSortSheet() async {
     final options = [
-      const SortOptionItem('lastAddedTo', 'Last Used'),
+      const SortOptionItem('lastAddedTo', 'Last Added'),
       const SortOptionItem('dateCreated', 'Date Created'),
       const SortOptionItem('title', 'Name'),
       const SortOptionItem('count', 'Entry Count'),
+      const SortOptionItem('random', 'Random'),
     ];
 
     final result = await showUnifiedSortSheet(
@@ -145,8 +161,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (result != null && mounted) {
       setState(() {
-        _folderSortKey = result.key;
-        _folderSortAsc = result.isAscending;
+        if (result.key == 'random') {
+          _folderSortKey = 'random';
+          _folderSortAsc = true;
+          _regenerateRandomValues();
+        } else {
+          _folderSortKey = result.key;
+          _folderSortAsc = result.isAscending;
+        }
       });
     }
   }
@@ -372,6 +394,12 @@ class _HomeScreenState extends State<HomeScreen> {
           final countA = _folderCounts[a.id] ?? 0;
           final countB = _folderCounts[b.id] ?? 0;
           result = countA.compareTo(countB);
+          break;
+
+        case 'random':
+          final rA = _randomSortValues[a.id] ?? 0;
+          final rB = _randomSortValues[b.id] ?? 0;
+          result = rA.compareTo(rB);
           break;
       }
 
