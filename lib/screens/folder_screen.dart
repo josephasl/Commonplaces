@@ -10,12 +10,14 @@ import '../../attributes.dart';
 import '../ui/app_styles.dart';
 import '../shakeable.dart';
 import '../ui/widgets/common_ui.dart';
+import 'folder_board_view.dart';
 
 class FolderScreen extends StatefulWidget {
   final AppFolder folder;
   final StorageService storage;
   final VoidCallback? onBack;
   final Function(List<AppEntry> entries, int index) onEntryTap;
+  final ValueChanged<bool>? onBoardStatusChanged;
 
   const FolderScreen({
     super.key,
@@ -23,6 +25,7 @@ class FolderScreen extends StatefulWidget {
     required this.storage,
     required this.onEntryTap,
     this.onBack,
+    this.onBoardStatusChanged,
   });
 
   @override
@@ -45,8 +48,14 @@ class FolderScreenState extends State<FolderScreen> {
   bool _isNavigatingBack = false;
   bool _isSelectionMode = false;
   Set<String> _selectedEntryIds = {};
+
+  // Random Sort State
   Map<String, int> _randomSortValues = {};
   int _sortSeed = 0;
+
+  // Board View State
+  bool _showUnplacedMenu = false;
+  final GlobalKey<FolderBoardViewState> _boardViewKey = GlobalKey();
 
   void updateLastViewedEntry(String id) {
     _lastViewedEntryId = id;
@@ -54,21 +63,26 @@ class FolderScreenState extends State<FolderScreen> {
 
   void stopEditing() {
     if (_isEditing) setState(() => _isEditing = false);
-    if (_isSelectionMode)
+    if (_isSelectionMode) {
       setState(() {
         _isSelectionMode = false;
         _selectedEntryIds.clear();
+        _showUnplacedMenu = false;
       });
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    _initializeData();
+  }
+
+  void _initializeData() {
     if (widget.folder.id != 'untagged_special_id') {
       _activeTags = Set.from(widget.folder.displayTags);
     }
 
-    // --- LOAD SAVED SORT PREFS ---
     _sortAttributeKey = widget.folder.sortKey;
     _isAscending = widget.folder.sortAscending;
 
@@ -79,7 +93,6 @@ class FolderScreenState extends State<FolderScreen> {
       _sortAttributeKey = widget.folder.activeAttributes.first;
     }
 
-    // Initial data load
     if (widget.folder.id == 'untagged_special_id') {
       _allFolderEntries = widget.storage.getUntaggedEntries();
     } else {
@@ -94,9 +107,28 @@ class FolderScreenState extends State<FolderScreen> {
       }
     }
 
-    // FIX 1: Generate values immediately in initState if needed
     if (_sortAttributeKey == 'random') {
       _regenerateRandomValues();
+    }
+  }
+
+  @override
+  void didUpdateWidget(FolderScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.folder.id != oldWidget.folder.id) {
+      _initializeData();
+      return;
+    }
+
+    if (widget.folder.id == 'untagged_special_id') {
+      _allFolderEntries = widget.storage.getUntaggedEntries();
+    } else {
+      _allFolderEntries = widget.storage.getEntriesForFolder(widget.folder);
+    }
+
+    if (_sortAttributeKey == 'random') {
+      _reconcileRandomValues();
     }
   }
 
@@ -160,7 +192,6 @@ class FolderScreenState extends State<FolderScreen> {
             _activeTags = currentTags.toSet();
           }
         }
-        // FIX 2: Regenerate on refresh if mode is random
         if (_sortAttributeKey == 'random') {
           _reconcileRandomValues();
         }
@@ -221,15 +252,13 @@ class FolderScreenState extends State<FolderScreen> {
         if (result.key == 'random') {
           _sortAttributeKey = 'random';
           _isAscending = true;
-          _regenerateRandomValues(); // This updates the map
+          _regenerateRandomValues();
           _sortSeed++;
         } else {
           _sortAttributeKey = result.key;
           _isAscending = result.isAscending;
         }
       });
-      // The setState above forces build -> sort -> updated view.
-      // We do NOT need to change the PageStorageKey.
 
       if (widget.folder.id != 'untagged_special_id') {
         widget.folder.setSortPreferences(_sortAttributeKey, _isAscending);
@@ -267,6 +296,24 @@ class FolderScreenState extends State<FolderScreen> {
     });
   }
 
+  void _resetBoardView() {
+    _boardViewKey.currentState?.resetView();
+  }
+
+  void _confirmResetBoard() {
+    showDeleteConfirmationDialog(
+      context: context,
+      title: "Reset Board?",
+      message: "Move all items back to unplaced?",
+      subtitle: "Current positions will be lost.",
+      onConfirm: () async {
+        widget.folder.clearBoardData();
+        await widget.storage.saveFolder(widget.folder);
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     List<AppEntry> processedEntries = [];
@@ -295,9 +342,6 @@ class FolderScreenState extends State<FolderScreen> {
         return searchStr.contains(_searchQuery.toLowerCase());
       }).toList();
     }
-
-    // FIX 3: Removed the "lazy" regeneration check here.
-    // We rely on initState, refresh, and _showSortSheet to handle it.
 
     processedEntries.sort((a, b) {
       if (_sortAttributeKey == 'random') {
@@ -338,6 +382,16 @@ class FolderScreenState extends State<FolderScreen> {
 
     final visibleAttrs = widget.folder.visibleAttributes;
     final isListLayout = widget.folder.layout == 'list';
+    final isBoardLayout = widget.folder.layout == 'board';
+
+    int unplacedCount = 0;
+    if (isBoardLayout) {
+      // Use the safe check
+      unplacedCount = processedEntries
+          .where((e) => !widget.folder.isEntryPlaced(e.id))
+          .length;
+    }
+
     double listWidth = (AppDimens.paddingM * 2) + (AppDimens.paddingL * 2);
     for (var key in visibleAttrs) {
       final def = registry[key];
@@ -345,13 +399,13 @@ class FolderScreenState extends State<FolderScreen> {
     }
 
     final pageKey = PageStorageKey(
-      'folder_${isListLayout ? 'list' : 'grid'}_${widget.folder.id}_$_sortSeed',
+      'folder_${isListLayout ? 'list' : 'grid'}_${widget.folder.id}',
     );
 
     return Listener(
       onPointerDown: (event) => _dragStart = event.position,
       onPointerUp: (event) {
-        if (isListLayout) return;
+        if (isListLayout || isBoardLayout) return;
         final delta = event.position - _dragStart;
         if (delta.dx < -50 && delta.dy.abs() < 50)
           _openLastViewedEntry(processedEntries);
@@ -478,62 +532,136 @@ class FolderScreenState extends State<FolderScreen> {
                 if (_isEditing && !_isSelectionMode)
                   setState(() => _isEditing = false);
               },
-              child: isListLayout
-                  ? NotificationListener<ScrollUpdateNotification>(
-                      onNotification: (notification) {
-                        if (notification.metrics.axis == Axis.horizontal &&
-                            notification.dragDetails != null &&
-                            !_isNavigatingBack) {
-                          if (notification.metrics.pixels < -20) {
-                            _isNavigatingBack = true;
-                            if (widget.onBack != null) {
-                              widget.onBack!();
-                            } else {
-                              Navigator.of(context).maybePop();
-                            }
-                            Future.delayed(
-                              const Duration(milliseconds: 500),
-                              () {
-                                if (mounted) _isNavigatingBack = false;
-                              },
-                            );
-                          } else if (notification.metrics.pixels >
-                              notification.metrics.maxScrollExtent + 20) {
-                            _isNavigatingBack = true;
-                            _openLastViewedEntry(processedEntries);
-                            Future.delayed(
-                              const Duration(milliseconds: 500),
-                              () {
-                                if (mounted) _isNavigatingBack = false;
-                              },
-                            );
-                          }
-                        }
-                        return false;
-                      },
-                      child: SingleChildScrollView(
-                        controller: _horizontalScrollController,
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: math.max(
-                            MediaQuery.of(context).size.width,
-                            listWidth,
-                          ),
-                          child: ListView.builder(
+              child: isBoardLayout
+                  ? FolderBoardView(
+                      key: _boardViewKey,
+                      folder: widget.folder,
+                      storage: widget.storage,
+                      entries: processedEntries,
+                      visibleAttributes: visibleAttrs,
+                      registry: registry,
+                      onEntryTap: widget.onEntryTap,
+                      onBoardStatusChanged: widget.onBoardStatusChanged,
+                      isSelectionMode: _isSelectionMode,
+                      selectedEntryIds: _selectedEntryIds,
+                      onToggleSelection: _toggleSelection,
+                    )
+                  : (isListLayout
+                        ? NotificationListener<ScrollUpdateNotification>(
+                            onNotification: (notification) {
+                              if (notification.metrics.axis ==
+                                      Axis.horizontal &&
+                                  notification.dragDetails != null &&
+                                  !_isNavigatingBack) {
+                                if (notification.metrics.pixels < -20) {
+                                  _isNavigatingBack = true;
+                                  if (widget.onBack != null) {
+                                    widget.onBack!();
+                                  } else {
+                                    Navigator.of(context).maybePop();
+                                  }
+                                  Future.delayed(
+                                    const Duration(milliseconds: 500),
+                                    () {
+                                      if (mounted) _isNavigatingBack = false;
+                                    },
+                                  );
+                                } else if (notification.metrics.pixels >
+                                    notification.metrics.maxScrollExtent + 20) {
+                                  _isNavigatingBack = true;
+                                  _openLastViewedEntry(processedEntries);
+                                  Future.delayed(
+                                    const Duration(milliseconds: 500),
+                                    () {
+                                      if (mounted) _isNavigatingBack = false;
+                                    },
+                                  );
+                                }
+                              }
+                              return false;
+                            },
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              physics: const AlwaysScrollableScrollPhysics(
+                                parent: BouncingScrollPhysics(),
+                              ),
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: math.max(
+                                  MediaQuery.of(context).size.width,
+                                  listWidth,
+                                ),
+                                child: ListView.builder(
+                                  controller: _scrollController,
+                                  key: pageKey,
+                                  physics: const AlwaysScrollableScrollPhysics(
+                                    parent: BouncingScrollPhysics(),
+                                  ),
+                                  padding: EdgeInsets.fromLTRB(
+                                    0,
+                                    widget.folder.displayTags.isNotEmpty
+                                        ? 68
+                                        : 0,
+                                    0,
+                                    100,
+                                  ),
+                                  itemCount: processedEntries.length,
+                                  itemBuilder: (context, index) {
+                                    final entry = processedEntries[index];
+                                    final isSelected = _selectedEntryIds
+                                        .contains(entry.id);
+                                    return GestureDetector(
+                                      key: ValueKey(entry.id),
+                                      behavior: HitTestBehavior.opaque,
+                                      onLongPress: () =>
+                                          setState(() => _isEditing = true),
+                                      onTap: () {
+                                        if (_isSelectionMode) {
+                                          _toggleSelection(entry.id);
+                                        } else if (_isEditing) {
+                                          setState(() => _isEditing = false);
+                                        } else {
+                                          updateLastViewedEntry(entry.id);
+                                          widget.onEntryTap(
+                                            processedEntries,
+                                            index,
+                                          );
+                                        }
+                                      },
+                                      child: ShakeableWithDelete(
+                                        enabled:
+                                            _isEditing && !_isSelectionMode,
+                                        onDelete: () => _deleteEntry(entry),
+                                        child: EntryRow(
+                                          entry: entry,
+                                          isSelected: isSelected,
+                                          visibleAttributes: visibleAttrs,
+                                          tagColorResolver:
+                                              widget.storage.getTagColor,
+                                          registry: registry,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          )
+                        : MasonryGridView.count(
                             controller: _scrollController,
-                            key: pageKey, // Stable Key
+                            key: pageKey,
                             physics: const AlwaysScrollableScrollPhysics(
                               parent: BouncingScrollPhysics(),
                             ),
                             padding: EdgeInsets.fromLTRB(
-                              0,
-                              widget.folder.displayTags.isNotEmpty ? 68 : 0,
-                              0,
+                              8,
+                              widget.folder.displayTags.isNotEmpty ? 68 : 10,
+                              8,
                               100,
                             ),
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
                             itemCount: processedEntries.length,
                             itemBuilder: (context, index) {
                               final entry = processedEntries[index];
@@ -542,7 +670,6 @@ class FolderScreenState extends State<FolderScreen> {
                               );
                               return GestureDetector(
                                 key: ValueKey(entry.id),
-                                behavior: HitTestBehavior.opaque,
                                 onLongPress: () =>
                                     setState(() => _isEditing = true),
                                 onTap: () {
@@ -558,73 +685,24 @@ class FolderScreenState extends State<FolderScreen> {
                                 child: ShakeableWithDelete(
                                   enabled: _isEditing && !_isSelectionMode,
                                   onDelete: () => _deleteEntry(entry),
-                                  child: EntryRow(
-                                    entry: entry,
-                                    isSelected: isSelected,
-                                    visibleAttributes: visibleAttrs,
-                                    tagColorResolver:
-                                        widget.storage.getTagColor,
-                                    registry: registry,
+                                  child: Hero(
+                                    tag: 'entry_hero_${entry.id}',
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: EntryCard(
+                                        entry: entry,
+                                        isSelected: isSelected,
+                                        visibleAttributes: visibleAttrs,
+                                        tagColorResolver:
+                                            widget.storage.getTagColor,
+                                        registry: registry,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               );
                             },
-                          ),
-                        ),
-                      ),
-                    )
-                  : MasonryGridView.count(
-                      controller: _scrollController,
-                      key: pageKey, // Stable Key
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      padding: EdgeInsets.fromLTRB(
-                        8,
-                        widget.folder.displayTags.isNotEmpty ? 68 : 10,
-                        8,
-                        100,
-                      ),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      itemCount: processedEntries.length,
-                      itemBuilder: (context, index) {
-                        final entry = processedEntries[index];
-                        final isSelected = _selectedEntryIds.contains(entry.id);
-                        return GestureDetector(
-                          key: ValueKey(entry.id),
-                          onLongPress: () => setState(() => _isEditing = true),
-                          onTap: () {
-                            if (_isSelectionMode) {
-                              _toggleSelection(entry.id);
-                            } else if (_isEditing) {
-                              setState(() => _isEditing = false);
-                            } else {
-                              updateLastViewedEntry(entry.id);
-                              widget.onEntryTap(processedEntries, index);
-                            }
-                          },
-                          child: ShakeableWithDelete(
-                            enabled: _isEditing && !_isSelectionMode,
-                            onDelete: () => _deleteEntry(entry),
-                            child: Hero(
-                              tag: 'entry_hero_${entry.id}',
-                              child: Material(
-                                color: Colors.transparent,
-                                child: EntryCard(
-                                  entry: entry,
-                                  isSelected: isSelected,
-                                  visibleAttributes: visibleAttrs,
-                                  tagColorResolver: widget.storage.getTagColor,
-                                  registry: registry,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                          )),
             ),
             if (widget.folder.displayTags.isNotEmpty)
               Positioned(
@@ -669,24 +747,42 @@ class FolderScreenState extends State<FolderScreen> {
               right: 16,
               child: Row(
                 children: [
-                  Expanded(
-                    child: AppSearchBar(
-                      controller: _searchController,
-                      showClear: _searchQuery.isNotEmpty,
-                      onClear: () {
-                        _searchController.clear();
-                        if (mounted) setState(() => _searchQuery = '');
-                      },
-                      onChanged: (val) {
-                        if (mounted) setState(() => _searchQuery = val);
-                      },
+                  if (isBoardLayout)
+                    AppFloatingButton(
+                      icon: CupertinoIcons.scope,
+                      onTap: _resetBoardView,
+                    )
+                  else
+                    Expanded(
+                      child: AppSearchBar(
+                        controller: _searchController,
+                        showClear: _searchQuery.isNotEmpty,
+                        onClear: () {
+                          _searchController.clear();
+                          if (mounted) setState(() => _searchQuery = '');
+                        },
+                        onChanged: (val) {
+                          if (mounted) setState(() => _searchQuery = val);
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppDimens.spacingM),
-                  AppFloatingButton(
-                    icon: CupertinoIcons.sort_down,
-                    onTap: _showSortSheet,
-                  ),
+                  if (isBoardLayout)
+                    const Spacer()
+                  else
+                    const SizedBox(width: AppDimens.spacingM),
+                  if (isBoardLayout)
+                    AppFloatingButton(
+                      icon: CupertinoIcons.tray,
+                      badgeCount: unplacedCount,
+                      onTap: () => setState(
+                        () => _showUnplacedMenu = !_showUnplacedMenu,
+                      ),
+                    )
+                  else
+                    AppFloatingButton(
+                      icon: CupertinoIcons.sort_down,
+                      onTap: _showSortSheet,
+                    ),
                   if (!_isSelectionMode) ...[
                     const SizedBox(width: AppDimens.spacingM),
                     AppFloatingButton(
@@ -711,6 +807,82 @@ class FolderScreenState extends State<FolderScreen> {
                 ],
               ),
             ),
+            if (isBoardLayout)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                left: 0,
+                right: 0,
+                bottom: _showUnplacedMenu ? 0 : -400,
+                height: 400,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(AppDimens.cornerRadius),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Unplaced Items ($unplacedCount)",
+                              style: AppTextStyles.header,
+                            ),
+                            Row(
+                              children: [
+                                if (processedEntries.length > unplacedCount)
+                                  CupertinoButton(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    minSize: 0,
+                                    onPressed: _confirmResetBoard,
+                                    child: const Text(
+                                      "Reset Board",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.destructive,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () =>
+                                      setState(() => _showUnplacedMenu = false),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: UnplacedItemsMenu(
+                          entries: processedEntries,
+                          folder: widget.folder,
+                          storage: widget.storage,
+                          visibleAttributes: visibleAttrs,
+                          registry: registry,
+                          onDragStarted: () =>
+                              setState(() => _showUnplacedMenu = false),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

@@ -157,6 +157,42 @@ class AppFolder {
   void setActiveAttributes(List<String> attrs) =>
       attributes['activeAttributes'] = attrs;
 
+  // --- BOARD DATA ---
+  void setBoardEntryPosition(String entryId, double x, double y, double scale) {
+    final Map<String, dynamic> boardData = Map<String, dynamic>.from(
+      attributes['boardData'] ?? {},
+    );
+    boardData[entryId] = {'x': x, 'y': y, 'scale': scale};
+    attributes['boardData'] = boardData;
+  }
+
+  Map<String, double>? getBoardEntryPosition(String entryId) {
+    final boardData = attributes['boardData'];
+    if (boardData is Map && boardData.containsKey(entryId)) {
+      final data = boardData[entryId];
+      if (data is Map) {
+        return {
+          'x': (data['x'] as num).toDouble(),
+          'y': (data['y'] as num).toDouble(),
+          'scale': (data['scale'] as num).toDouble(),
+        };
+      }
+    }
+    return null;
+  }
+
+  bool isEntryPlaced(String entryId) {
+    final pos = getBoardEntryPosition(entryId);
+    if (pos == null) return false;
+    final x = pos['x'];
+    final y = pos['y'];
+    return x != null && x.isFinite && y != null && y.isFinite;
+  }
+
+  void clearBoardData() {
+    attributes['boardData'] = {};
+  }
+
   dynamic getAttribute<T>(String key) => attributes[key];
   void setAttribute(String key, dynamic value) => attributes[key] = value;
 

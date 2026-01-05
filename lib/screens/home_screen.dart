@@ -44,6 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 1;
   Map<String, int> _folderCounts = {};
   AppFolder? _lastOpenedFolder;
+  bool _isFolderAtRoot = true;
+  bool _isFolderBoardMode = false;
 
   final Map<String, int> _randomSortValues = {};
 
@@ -68,9 +70,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ? const BouncingScrollPhysics()
         : const NeverScrollableScrollPhysics();
     if (_pagePhysics.runtimeType != newPhysics.runtimeType) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _pagePhysics = newPhysics);
-      });
+      if (mounted) setState(() => _pagePhysics = newPhysics);
+    }
+  }
+
+  void _updatePageSwipe() {
+    if (_selectedIndex == 2) {
+      _setPageSwipeEnabled(_isFolderAtRoot && !_isFolderBoardMode);
+    } else {
+      _setPageSwipeEnabled(true);
     }
   }
 
@@ -183,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _folderScreenKey.currentState?.stopEditing();
       }
 
-      if (index != 2) _pagePhysics = const BouncingScrollPhysics();
+      _updatePageSwipe();
     });
   }
 
@@ -272,7 +280,14 @@ class _HomeScreenState extends State<HomeScreen> {
           folderScreenKey: _folderScreenKey,
           onBack: () => _onBottomNavTapped(1),
           onDataChanged: _refreshData,
-          onStackChanged: (isAtRoot) => _setPageSwipeEnabled(isAtRoot),
+          onStackChanged: (isAtRoot) {
+            _isFolderAtRoot = isAtRoot;
+            _updatePageSwipe();
+          },
+          onBoardModeChanged: (isBoard) {
+            _isFolderBoardMode = isBoard;
+            _updatePageSwipe();
+          },
         ),
       );
     }
@@ -657,6 +672,7 @@ class FolderTab extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onDataChanged;
   final Function(bool isAtRoot) onStackChanged;
+  final ValueChanged<bool>? onBoardModeChanged;
 
   const FolderTab({
     super.key,
@@ -667,6 +683,7 @@ class FolderTab extends StatefulWidget {
     required this.onBack,
     required this.onDataChanged,
     required this.onStackChanged,
+    this.onBoardModeChanged,
   });
 
   @override
@@ -703,6 +720,7 @@ class _FolderTabState extends State<FolderTab>
             folder: widget.folder,
             storage: widget.storage,
             onBack: widget.onBack,
+            onBoardStatusChanged: widget.onBoardModeChanged,
             onEntryTap: (entries, index) {
               Navigator.of(context)
                   .push(

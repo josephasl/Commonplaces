@@ -135,6 +135,7 @@ class AppFloatingButton extends StatelessWidget {
   final VoidCallback onTap;
   final Color color;
   final Color iconColor;
+  final int badgeCount;
 
   const AppFloatingButton({
     super.key,
@@ -142,21 +143,51 @@ class AppFloatingButton extends StatelessWidget {
     required this.onTap,
     this.color = AppColors.background,
     this.iconColor = AppColors.primary,
+    this.badgeCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        height: 50,
-        width: 50,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          boxShadow: AppDecorations.floatingShadow,
-        ),
-        child: Icon(icon, color: iconColor),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 50,
+            width: 50,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: AppDecorations.floatingShadow,
+            ),
+            child: Icon(icon, color: iconColor),
+          ),
+          if (badgeCount > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.all(5),
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+                child: Center(
+                  child: Text(
+                    badgeCount > 99 ? '99+' : '$badgeCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

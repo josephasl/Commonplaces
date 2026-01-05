@@ -10,7 +10,12 @@ class AppColors {
 
   static const Color background = Colors.white;
 
-  static const Color coloredBackground = Color(0xFFF2F2F7); // iOS Grouped Grey
+  static const Color coloredBackground = Color.fromARGB(
+    255,
+    233,
+    233,
+    227,
+  ); // iOS Grouped Grey
   static const Color inputBackground = CupertinoColors.systemGrey6;
   static const Color untaggedBackground = Color.fromARGB(255, 218, 218, 223);
 
